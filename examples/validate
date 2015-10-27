@@ -1,0 +1,93 @@
+#!/usr/bin/env python
+from argparse import ArgumentParser
+from itertools import izip
+from sys import exit
+
+import h5py
+import numpy as np
+
+def pack(which, names, fields):
+  field_types = []
+  for name, field in izip(names, fields):
+    try:
+      field_types.append((name, (field.dtype, field.shape[1])))
+    except IndexError:
+      field_types.append((name, field.dtype))
+
+  particles = np.empty(fields[0].shape[0], dtype=field_types)
+  for name, field in izip(names, fields):
+    particles[name] = field
+
+  particles.sort()
+  return particles
+
+def compare(source, target, threshold=0, write=None):
+  changed = np.zeros(source.shape, dtype='bool')
+  max_relative = 0
+
+  if write:
+    changes = h5py.File(write, 'w')
+
+  for field in source.dtype.names:
+    try:
+      absolute = np.linalg.norm(target[field] - source[field], axis=1)
+      relative = absolute / np.linalg.norm(source[field], axis=1)
+    except ValueError:
+      absolute = target[field] - source[field]
+      relative = absolute / source[field]
+    max_relative = max(max_relative, relative.max())
+    changed = np.logical_or(changed, relative > threshold)
+    if write:
+      changes['/PartType0/' + field] = absolute
+      changes['/Relative/PartType0/' + field] = relative
+
+  if write:
+    changes.close()
+
+  change_count = np.count_nonzero(changed)
+  print '{0} changes, up to {1:.0g}%'.format(change_count, 100 * max_relative)
+
+def validate(source, target, fields, threshold=0, write=None):
+  files = {}
+  files['source'] = h5py.File(source, 'r')
+  files['target'] = h5py.File(target, 'r')
+
+  particles = {}
+  for which, f in files.iteritems():
+    what = []
+    for field in fields:
+      try:
+        what.append(f['/PartType0/' + field][:])
+      except KeyError:
+        exit('Field "{}" not found.'.format(field))
+    particles[which] = pack(which, fields, what)
+
+  compare(particles['source'], particles['target'], threshold, write)
+
+
+def field_name(s):
+  if not s.isalnum():
+    # argparse provides a friendly message
+    raise ValueError
+  return s
+
+if __name__ == '__main__':
+  parser = ArgumentParser(description='Find SWIFT output changes.')
+  parser.add_argument('source', help='path to original input file')
+  parser.add_argument('target', help='path to updated input file')
+  parser.add_argument('--fields', nargs='*', type=field_name,
+                      help='list of PartType0 fields to compare; if provided, '
+                           'must appear after positional arguments (above)',
+                      default=['Acceleration', 'Coordinates', 'Density',
+                               'InternalEnergy', 'Masses', 'SmoothingLength',
+                               'TimeStep', 'Velocities'])
+  parser.add_argument('--threshold', metavar='X', type=float,
+                      help='tolerate relative error no greater than X',
+                      default=0)
+  parser.add_argument('--write', metavar='FILE', type=str,
+                      help='write HDF5-format changes to FILE')
+
+  arguments = parser.parse_args()
+  validate(arguments.source, arguments.target,
+           ['ParticleIDs'] + arguments.fields, arguments.threshold,
+           arguments.write)
