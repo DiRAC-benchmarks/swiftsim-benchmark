@@ -810,7 +810,7 @@ void DOPAIR1(struct runner *r, struct cell *ci, struct cell *cj) {
 
   /* Loop over the parts in ci. */
   int pid_min = exit_from_right(sort_i, count_i, dj_min - hi_max - dx_max);
-  for (pid = count_i - 1; pid > pid_min; pid--) {
+  for (pid = pid_min+1; pid < count_i; pid++) {
 
     /* Get a hold of the ith part in ci. */
     pi = &parts_i[sort_i[pid].i];
@@ -889,7 +889,7 @@ void DOPAIR1(struct runner *r, struct cell *ci, struct cell *cj) {
 
     /* Loop over the parts in ci. */
     int pid_min = exit_from_right(sort_i, count_i, dj);
-    for (pid = count_i - 1; pid > pid_min; pid--) {
+    for (pid = pid_min+1; pid < count_i; pid++) {
 
       /* Get a pointer to the jth particle. */
       pi = &parts_i[sort_i[pid].i];
@@ -1034,7 +1034,7 @@ void DOPAIR2(struct runner *r, struct cell *ci, struct cell *cj) {
 
   /* Loop over the parts in ci. */
   int pid_min = exit_from_right(sort_i, count_i, dj_min - hi_max - dx_max);
-  for (pid = count_i - 1; pid > pid_min; pid--) {
+  for (pid = pid_min+1; pid < count_i; pid++) {
 
     /* Get a hold of the ith part in ci. */
     pi = &parts_i[sort_i[pid].i];
@@ -1197,7 +1197,7 @@ void DOPAIR2(struct runner *r, struct cell *ci, struct cell *cj) {
 
       /* Loop over the parts in ci. */
       int pid_min = exit_from_right(sortdt_i, countdt_i, dj);
-      for (pid = countdt_i - 1; pid > pid_min; pid--) {
+      for (pid = pid_min+1; pid < countdt_i; pid++) {
 
         /* Get a pointer to the jth particle. */
         pi = &parts_i[sortdt_i[pid].i];
@@ -1247,7 +1247,7 @@ void DOPAIR2(struct runner *r, struct cell *ci, struct cell *cj) {
 
       /* Loop over the parts in ci. */
       int pid_min = exit_from_right(sort_i, count_i, dj);
-      for (pid = count_i - 1; pid > pid_min; pid--) {
+      for (pid = pid_min+1; pid < count_i; pid++) {
 
         /* Get a pointer to the jth particle. */
         pi = &parts_i[sort_i[pid].i];
