@@ -712,6 +712,20 @@ int main(int argc, char *argv[]) {
     error("call to MPI_Finalize failed with error %i.", res);
 #endif
 
+#ifdef CELL_CACHE_STATISTICS
+  extern size_t cell_cache_hit_count, cell_cache_miss_count;
+  extern int cell_cache_nr_sets;
+  extern size_t *cell_cache_set_count;
+
+  size_t total_count = cell_cache_hit_count + cell_cache_miss_count;
+  printf("cell cache: %zu hits, %zu misses (%.1f%%)\n      set: hashes\n",
+      cell_cache_hit_count, cell_cache_miss_count,
+      (100.*cell_cache_hit_count) / total_count);
+  for (int i = 0; i < cell_cache_nr_sets; ++i) {
+    printf("  %7d: %zu\n", i, cell_cache_set_count[i]);
+  }
+#endif
+
   /* Say goodbye. */
   if (myrank == 0) message("done. Bye.");
 

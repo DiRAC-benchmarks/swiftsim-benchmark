@@ -1,6 +1,6 @@
 /*******************************************************************************
  * This file is part of SWIFT.
- * Copyright (c) 2012 Pedro Gonnet (pedro.gonnet@durham.ac.uk)
+ * Copyright (c) 2016 Angus Lepper (angus.lepper@ed.ac.uk)
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Lesser General Public License as published
@@ -16,41 +16,24 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  *
  ******************************************************************************/
-#ifndef SWIFT_SWIFT_H
-#define SWIFT_SWIFT_H
+#ifndef SWIFT_CELL_CACHE_H
+#define SWIFT_CELL_CACHE_H
 
-/* Config parameters. */
-#include "../config.h"
+#include <stdbool.h>
 
-/* Local headers. */
-#include "atomic.h"
-#include "cell.h"
-#include "cell_cache.h"
-#include "clocks.h"
-#include "const.h"
-#include "const.h"
-#include "cycle.h"
-#include "debug.h"
-#include "engine.h"
-#include "error.h"
-#include "gravity.h"
-#include "hydro.h"
-#include "lock.h"
-#include "map.h"
-#include "multipole.h"
-#include "parallel_io.h"
-#include "part.h"
-#include "queue.h"
-#include "runner.h"
-#include "scheduler.h"
-#include "serial_io.h"
-#include "single_io.h"
-#include "space.h"
-#include "task.h"
-#include "timers.h"
-#include "units.h"
-#include "tools.h"
-#include "partition.h"
-#include "version.h"
+typedef double cell_cache_float;
 
-#endif /* SWIFT_SWIFT_H */
+struct cell_cache_data {
+  cell_cache_float *parts_xs[3];
+};
+
+void cell_cache_init(int nr_threads, int nr_slots, int nr_ways);
+void cell_cache_invalidate(void);
+
+struct runner;
+struct cell_cache_data *cell_cache_single(struct runner *r, struct cell *c,
+    int sid);
+void cell_cache_pair(struct runner* r, struct cell_cache_data **di,
+    struct cell *ci, struct cell_cache_data **dj, struct cell *cj, int sid);
+
+#endif

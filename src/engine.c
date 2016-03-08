@@ -46,6 +46,7 @@
 /* Local headers. */
 #include "atomic.h"
 #include "cell.h"
+#include "cell_cache.h"
 #include "clocks.h"
 #include "cycle.h"
 #include "debug.h"
@@ -2067,6 +2068,11 @@ void engine_step(struct engine *e) {
     mask |= 1 << task_type_recv;
   }
 
+#if !defined(NO_CELL_CACHE) && defined(VECTORIZE)
+  /* Drift/kick invalidate cached particle properties */
+  cell_cache_invalidate();
+#endif
+
   /* Send off the runners. */
   TIMER_TIC;
   engine_launch(e, e->nr_threads, mask, submask);
@@ -2550,6 +2556,10 @@ void engine_init(struct engine *e, struct space *s, float dt, int nr_threads,
     // message( "runner %i on cpuid=%i with qid=%i." , e->runners[k].id ,
     // e->runners[k].cpuid , e->runners[k].qid );
   }
+
+#if !defined(NO_CELL_CACHE) && defined(VECTORIZE)
+  cell_cache_init(nr_threads, 2, 2);
+#endif
 
   /* Wait for the runner threads to be in place. */
   while (e->barrier_running || e->barrier_launch)
