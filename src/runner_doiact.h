@@ -300,6 +300,39 @@ void DOSELF_NAIVE(struct runner *r, struct cell *restrict c) {
   TIMER_TOC(TIMER_DOSELF);
 }
 
+#ifndef EXIT_FROM_DEFINED
+#define EXIT_FROM_DEFINED
+static inline int exit_from_left(struct entry* sort, int count, float max_d) {
+  int begin = 0, end = count, min = count;
+  while (begin < end) {
+    int mid = begin + (end - begin) / 2;
+    if (sort[mid].d > max_d) {
+      min = mid < min ? mid : min;
+      end = mid;
+    } else {
+      begin = mid+1;
+    }
+  }
+
+  return min;
+}
+
+static inline int exit_from_right(struct entry* sort, int count, float min_d) {
+  int begin = 0, end = count, max = -1;
+  while (begin < end) {
+    int mid = begin + (end - begin) / 2;
+    if (sort[mid].d < min_d) {
+      max = mid > max ? mid : max;
+      begin = mid+1;
+    } else {
+      end = mid;
+    }
+  }
+
+  return max;
+}
+#endif
+
 /**
  * @brief Compute the interactions between a cell pair, but only for the
  *      given indices in ci.
@@ -776,8 +809,8 @@ void DOPAIR1(struct runner *r, struct cell *ci, struct cell *cj) {
   dx_max = (ci->dx_max + cj->dx_max);
 
   /* Loop over the parts in ci. */
-  for (pid = count_i - 1; pid >= 0 && sort_i[pid].d + hi_max + dx_max > dj_min;
-       pid--) {
+  int pid_min = exit_from_right(sort_i, count_i, dj_min - hi_max - dx_max);
+  for (pid = count_i - 1; pid > pid_min; pid--) {
 
     /* Get a hold of the ith part in ci. */
     pi = &parts_i[sort_i[pid].i];
@@ -790,7 +823,8 @@ void DOPAIR1(struct runner *r, struct cell *ci, struct cell *cj) {
     for (k = 0; k < 3; k++) pix[k] = pi->x[k] - shift[k];
 
     /* Loop over the parts in cj. */
-    for (pjd = 0; pjd < count_j && sort_j[pjd].d < di; pjd++) {
+    int pjd_max = exit_from_left(sort_j, count_j, di);
+    for (pjd = 0; pjd < pjd_max; pjd++) {
 
       /* Get a pointer to the jth particle. */
       pj = &parts_j[sort_j[pjd].i];
@@ -840,8 +874,8 @@ void DOPAIR1(struct runner *r, struct cell *ci, struct cell *cj) {
   tic = getticks(); */
 
   /* Loop over the parts in cj. */
-  for (pjd = 0; pjd < count_j && sort_j[pjd].d - hj_max - dx_max < di_max;
-       pjd++) {
+  int pjd_max = exit_from_left(sort_j, count_j, di_max + hj_max + dx_max);
+  for (pjd = 0; pjd < pjd_max; pjd++) {
 
     /* Get a hold of the jth part in cj. */
     pj = &parts_j[sort_j[pjd].i];
@@ -854,7 +888,8 @@ void DOPAIR1(struct runner *r, struct cell *ci, struct cell *cj) {
     hjg2 = hj * hj * kernel_gamma2;
 
     /* Loop over the parts in ci. */
-    for (pid = count_i - 1; pid >= 0 && sort_i[pid].d > dj; pid--) {
+    int pid_min = exit_from_right(sort_i, count_i, dj);
+    for (pid = count_i - 1; pid > pid_min; pid--) {
 
       /* Get a pointer to the jth particle. */
       pi = &parts_i[sort_i[pid].i];
@@ -998,8 +1033,8 @@ void DOPAIR2(struct runner *r, struct cell *ci, struct cell *cj) {
   }
 
   /* Loop over the parts in ci. */
-  for (pid = count_i - 1; pid >= 0 && sort_i[pid].d + hi_max + dx_max > dj_min;
-       pid--) {
+  int pid_min = exit_from_right(sort_i, count_i, dj_min - hi_max - dx_max);
+  for (pid = count_i - 1; pid > pid_min; pid--) {
 
     /* Get a hold of the ith part in ci. */
     pi = &parts_i[sort_i[pid].i];
@@ -1014,7 +1049,8 @@ void DOPAIR2(struct runner *r, struct cell *ci, struct cell *cj) {
     if (pi->ti_end > ti_current) {
 
       /* Loop over the parts in cj within dt. */
-      for (pjd = 0; pjd < countdt_j && sortdt_j[pjd].d < di; pjd++) {
+      int pjd_max = exit_from_left(sortdt_j, countdt_j, di);
+      for (pjd = 0; pjd < pjd_max; pjd++) {
 
         /* Get a pointer to the jth particle. */
         pj = &parts_j[sortdt_j[pjd].i];
@@ -1064,7 +1100,8 @@ void DOPAIR2(struct runner *r, struct cell *ci, struct cell *cj) {
     else {
 
       /* Loop over the parts in cj. */
-      for (pjd = 0; pjd < count_j && sort_j[pjd].d < di; pjd++) {
+      int pjd_max = exit_from_left(sort_j, count_j, di);
+      for (pjd = 0; pjd < pjd_max; pjd++) {
 
         /* Get a pointer to the jth particle. */
         pj = &parts_j[sort_j[pjd].i];
@@ -1143,8 +1180,8 @@ void DOPAIR2(struct runner *r, struct cell *ci, struct cell *cj) {
   tic = getticks(); */
 
   /* Loop over the parts in cj. */
-  for (pjd = 0; pjd < count_j && sort_j[pjd].d - hj_max - dx_max < di_max;
-       pjd++) {
+  int pjd_max = exit_from_left(sort_j, count_j, di_max + hj_max + dx_max);
+  for (pjd = 0; pjd < pjd_max; pjd++) {
 
     /* Get a hold of the jth part in cj. */
     pj = &parts_j[sort_j[pjd].i];
@@ -1159,7 +1196,8 @@ void DOPAIR2(struct runner *r, struct cell *ci, struct cell *cj) {
     if (pj->ti_end > ti_current) {
 
       /* Loop over the parts in ci. */
-      for (pid = countdt_i - 1; pid >= 0 && sortdt_i[pid].d > dj; pid--) {
+      int pid_min = exit_from_right(sortdt_i, countdt_i, dj);
+      for (pid = countdt_i - 1; pid > pid_min; pid--) {
 
         /* Get a pointer to the jth particle. */
         pi = &parts_i[sortdt_i[pid].i];
@@ -1208,7 +1246,8 @@ void DOPAIR2(struct runner *r, struct cell *ci, struct cell *cj) {
     else {
 
       /* Loop over the parts in ci. */
-      for (pid = count_i - 1; pid >= 0 && sort_i[pid].d > dj; pid--) {
+      int pid_min = exit_from_right(sort_i, count_i, dj);
+      for (pid = count_i - 1; pid > pid_min; pid--) {
 
         /* Get a pointer to the jth particle. */
         pi = &parts_i[sort_i[pid].i];
