@@ -388,6 +388,11 @@ if test "$enable_warn" != "no"; then
     fi
 fi
 
+# False positives on some versions of GCC break the build cf. issue #118
+if test "$ax_cv_c_compiler_vendor" = "gnu"; then
+  CFLAGS="$CFLAGS -Wno-array-bounds"
+fi
+
 # Check for git, needed for revision stamps.
 AC_PATH_PROG([GIT_CMD], [git])
 AC_SUBST([GIT_CMD])
