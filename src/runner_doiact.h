@@ -173,9 +173,9 @@ void DOPAIR_NAIVE(struct runner *r, struct cell *restrict ci,
 
         /* Add this interaction to the queue. */
         r2q[icount] = r2;
-        dxq[3 * icount + 0] = dx[0];
-        dxq[3 * icount + 1] = dx[1];
-        dxq[3 * icount + 2] = dx[2];
+        dxq[VEC_SIZE * 0 + icount] = dx[0];
+        dxq[VEC_SIZE * 1 + icount] = dx[1];
+        dxq[VEC_SIZE * 2 + icount] = dx[2];
         hiq[icount] = hi;
         hjq[icount] = pj->h;
         piq[icount] = pi;
@@ -198,8 +198,12 @@ void DOPAIR_NAIVE(struct runner *r, struct cell *restrict ci,
 #ifdef VECTORIZE
   /* Pick up any leftovers. */
   if (icount > 0)
-    for (k = 0; k < icount; k++)
-      IACT(r2q[k], &dxq[3 * k], hiq[k], hjq[k], piq[k], pjq[k]);
+    for (k = 0; k < icount; k++) {
+      dx[0] = dxq[VEC_SIZE * 0 + k];
+      dx[1] = dxq[VEC_SIZE * 1 + k];
+      dx[2] = dxq[VEC_SIZE * 2 + k];
+      IACT(r2q[k], dx, hiq[k], hjq[k], piq[k], pjq[k]);
+    }
 #endif
 
   TIMER_TOC(TIMER_DOPAIR);
@@ -268,9 +272,9 @@ void DOSELF_NAIVE(struct runner *r, struct cell *restrict c) {
 
         /* Add this interaction to the queue. */
         r2q[icount] = r2;
-        dxq[3 * icount + 0] = dx[0];
-        dxq[3 * icount + 1] = dx[1];
-        dxq[3 * icount + 2] = dx[2];
+        dxq[VEC_SIZE * 0 + icount] = dx[0];
+        dxq[VEC_SIZE * 1 + icount] = dx[1];
+        dxq[VEC_SIZE * 2 + icount] = dx[2];
         hiq[icount] = hi;
         hjq[icount] = pj->h;
         piq[icount] = pi;
@@ -293,8 +297,12 @@ void DOSELF_NAIVE(struct runner *r, struct cell *restrict c) {
 #ifdef VECTORIZE
   /* Pick up any leftovers. */
   if (icount > 0)
-    for (k = 0; k < icount; k++)
-      IACT(r2q[k], &dxq[3 * k], hiq[k], hjq[k], piq[k], pjq[k]);
+    for (k = 0; k < icount; k++) {
+      dx[0] = dxq[VEC_SIZE * 0 + k];
+      dx[1] = dxq[VEC_SIZE * 1 + k];
+      dx[2] = dxq[VEC_SIZE * 2 + k];
+      IACT(r2q[k], dx, hiq[k], hjq[k], piq[k], pjq[k]);
+    }
 #endif
 
   TIMER_TOC(TIMER_DOSELF);
@@ -437,9 +445,9 @@ void DOPAIR_SUBSET(struct runner *r, struct cell *restrict ci,
 
           /* Add this interaction to the queue. */
           r2q[icount] = r2;
-          dxq[3 * icount + 0] = dx[0];
-          dxq[3 * icount + 1] = dx[1];
-          dxq[3 * icount + 2] = dx[2];
+          dxq[VEC_SIZE * 0 + icount] = dx[0];
+          dxq[VEC_SIZE * 1 + icount] = dx[1];
+          dxq[VEC_SIZE * 2 + icount] = dx[2];
           hiq[icount] = hi;
           hjq[icount] = pj->h;
           piq[icount] = pi;
@@ -500,9 +508,9 @@ void DOPAIR_SUBSET(struct runner *r, struct cell *restrict ci,
 
           /* Add this interaction to the queue. */
           r2q[icount] = r2;
-          dxq[3 * icount + 0] = dx[0];
-          dxq[3 * icount + 1] = dx[1];
-          dxq[3 * icount + 2] = dx[2];
+          dxq[VEC_SIZE * 0 + icount] = dx[0];
+          dxq[VEC_SIZE * 1 + icount] = dx[1];
+          dxq[VEC_SIZE * 2 + icount] = dx[2];
           hiq[icount] = hi;
           hjq[icount] = pj->h;
           piq[icount] = pi;
@@ -526,8 +534,12 @@ void DOPAIR_SUBSET(struct runner *r, struct cell *restrict ci,
 #ifdef VECTORIZE
   /* Pick up any leftovers. */
   if (icount > 0)
-    for (k = 0; k < icount; k++)
-      IACT_NONSYM(r2q[k], &dxq[3 * k], hiq[k], hjq[k], piq[k], pjq[k]);
+    for (k = 0; k < icount; k++) {
+      dx[0] = dxq[VEC_SIZE * 0 + k];
+      dx[1] = dxq[VEC_SIZE * 1 + k];
+      dx[2] = dxq[VEC_SIZE * 2 + k];
+      IACT_NONSYM(r2q[k], dx, hiq[k], hjq[k], piq[k], pjq[k]);
+    }
 #endif
 
   TIMER_TOC(timer_dopair_subset);
@@ -613,9 +625,9 @@ void DOPAIR_SUBSET_NAIVE(struct runner *r, struct cell *restrict ci,
 
         /* Add this interaction to the queue. */
         r2q[icount] = r2;
-        dxq[3 * icount + 0] = dx[0];
-        dxq[3 * icount + 1] = dx[1];
-        dxq[3 * icount + 2] = dx[2];
+        dxq[VEC_SIZE * 0 + icount] = dx[0];
+        dxq[VEC_SIZE * 1 + icount] = dx[1];
+        dxq[VEC_SIZE * 2 + icount] = dx[2];
         hiq[icount] = hi;
         hjq[icount] = pj->h;
         piq[icount] = pi;
@@ -638,8 +650,12 @@ void DOPAIR_SUBSET_NAIVE(struct runner *r, struct cell *restrict ci,
 #ifdef VECTORIZE
   /* Pick up any leftovers. */
   if (icount > 0)
-    for (k = 0; k < icount; k++)
-      IACT_NONSYM(r2q[k], &dxq[3 * k], hiq[k], hjq[k], piq[k], pjq[k]);
+    for (k = 0; k < icount; k++) {
+      dx[0] = dxq[VEC_SIZE * 0 + k];
+      dx[1] = dxq[VEC_SIZE * 1 + k];
+      dx[2] = dxq[VEC_SIZE * 2 + k];
+      IACT_NONSYM(r2q[k], dx, hiq[k], hjq[k], piq[k], pjq[k]);
+    }
 #endif
 
   TIMER_TOC(timer_dopair_subset);
@@ -716,9 +732,9 @@ void DOSELF_SUBSET(struct runner *r, struct cell *restrict ci,
 
         /* Add this interaction to the queue. */
         r2q[icount] = r2;
-        dxq[3 * icount + 0] = dx[0];
-        dxq[3 * icount + 1] = dx[1];
-        dxq[3 * icount + 2] = dx[2];
+        dxq[VEC_SIZE * 0 + icount] = dx[0];
+        dxq[VEC_SIZE * 1 + icount] = dx[1];
+        dxq[VEC_SIZE * 2 + icount] = dx[2];
         hiq[icount] = hi;
         hjq[icount] = pj->h;
         piq[icount] = pi;
@@ -741,8 +757,12 @@ void DOSELF_SUBSET(struct runner *r, struct cell *restrict ci,
 #ifdef VECTORIZE
   /* Pick up any leftovers. */
   if (icount > 0)
-    for (k = 0; k < icount; k++)
-      IACT_NONSYM(r2q[k], &dxq[3 * k], hiq[k], hjq[k], piq[k], pjq[k]);
+    for (k = 0; k < icount; k++) {
+      dx[0] = dxq[VEC_SIZE * 0 + k];
+      dx[1] = dxq[VEC_SIZE * 1 + k];
+      dx[2] = dxq[VEC_SIZE * 2 + k];
+      IACT_NONSYM(r2q[k], dx, hiq[k], hjq[k], piq[k], pjq[k]);
+    }
 #endif
 
   TIMER_TOC(timer_dopair_subset);
@@ -847,9 +867,9 @@ void DOPAIR1(struct runner *r, struct cell *ci, struct cell *cj) {
 
         /* Add this interaction to the queue. */
         r2q[icount] = r2;
-        dxq[3 * icount + 0] = dx[0];
-        dxq[3 * icount + 1] = dx[1];
-        dxq[3 * icount + 2] = dx[2];
+        dxq[VEC_SIZE * 0 + icount] = dx[0];
+        dxq[VEC_SIZE * 1 + icount] = dx[1];
+        dxq[VEC_SIZE * 2 + icount] = dx[2];
         hiq[icount] = hi;
         hjq[icount] = pj->h;
         piq[icount] = pi;
@@ -912,9 +932,9 @@ void DOPAIR1(struct runner *r, struct cell *ci, struct cell *cj) {
 
         /* Add this interaction to the queue. */
         r2q[icount] = r2;
-        dxq[3 * icount + 0] = dx[0];
-        dxq[3 * icount + 1] = dx[1];
-        dxq[3 * icount + 2] = dx[2];
+        dxq[VEC_SIZE * 0 + icount] = dx[0];
+        dxq[VEC_SIZE * 1 + icount] = dx[1];
+        dxq[VEC_SIZE * 2 + icount] = dx[2];
         hiq[icount] = hj;
         hjq[icount] = pi->h;
         piq[icount] = pj;
@@ -937,8 +957,12 @@ void DOPAIR1(struct runner *r, struct cell *ci, struct cell *cj) {
 #ifdef VECTORIZE
   /* Pick up any leftovers. */
   if (icount > 0)
-    for (k = 0; k < icount; k++)
-      IACT_NONSYM(r2q[k], &dxq[3 * k], hiq[k], hjq[k], piq[k], pjq[k]);
+    for (k = 0; k < icount; k++) {
+      dx[0] = dxq[VEC_SIZE * 0 + k];
+      dx[1] = dxq[VEC_SIZE * 1 + k];
+      dx[2] = dxq[VEC_SIZE * 2 + k];
+      IACT_NONSYM(r2q[k], dx, hiq[k], hjq[k], piq[k], pjq[k]);
+    }
 #endif
 
   TIMER_TOC(TIMER_DOPAIR);
@@ -1074,9 +1098,9 @@ void DOPAIR2(struct runner *r, struct cell *ci, struct cell *cj) {
 
           /* Add this interaction to the queue. */
           r2q1[icount1] = r2;
-          dxq1[3 * icount1 + 0] = dx[0];
-          dxq1[3 * icount1 + 1] = dx[1];
-          dxq1[3 * icount1 + 2] = dx[2];
+          dxq1[VEC_SIZE * 0 + icount1] = dx[0];
+          dxq1[VEC_SIZE * 1 + icount1] = dx[1];
+          dxq1[VEC_SIZE * 2 + icount1] = dx[2];
           hiq1[icount1] = hj;
           hjq1[icount1] = hi;
           piq1[icount1] = pj;
@@ -1132,9 +1156,9 @@ void DOPAIR2(struct runner *r, struct cell *ci, struct cell *cj) {
 
             /* Add this interaction to the symmetric queue. */
             r2q2[icount2] = r2;
-            dxq2[3 * icount2 + 0] = dx[0];
-            dxq2[3 * icount2 + 1] = dx[1];
-            dxq2[3 * icount2 + 2] = dx[2];
+            dxq2[VEC_SIZE * 0 + icount2] = dx[0];
+            dxq2[VEC_SIZE * 1 + icount2] = dx[1];
+            dxq2[VEC_SIZE * 2 + icount2] = dx[2];
             hiq2[icount2] = hi;
             hjq2[icount2] = hj;
             piq2[icount2] = pi;
@@ -1151,9 +1175,9 @@ void DOPAIR2(struct runner *r, struct cell *ci, struct cell *cj) {
 
             /* Add this interaction to the non-symmetric queue. */
             r2q1[icount1] = r2;
-            dxq1[3 * icount1 + 0] = dx[0];
-            dxq1[3 * icount1 + 1] = dx[1];
-            dxq1[3 * icount1 + 2] = dx[2];
+            dxq1[VEC_SIZE * 0 + icount1] = dx[0];
+            dxq1[VEC_SIZE * 1 + icount1] = dx[1];
+            dxq1[VEC_SIZE * 2 + icount1] = dx[2];
             hiq1[icount1] = hi;
             hjq1[icount1] = hj;
             piq1[icount1] = pi;
@@ -1221,9 +1245,9 @@ void DOPAIR2(struct runner *r, struct cell *ci, struct cell *cj) {
 
           /* Add this interaction to the queue. */
           r2q1[icount1] = r2;
-          dxq1[3 * icount1 + 0] = dx[0];
-          dxq1[3 * icount1 + 1] = dx[1];
-          dxq1[3 * icount1 + 2] = dx[2];
+          dxq1[VEC_SIZE * 0 + icount1] = dx[0];
+          dxq1[VEC_SIZE * 1 + icount1] = dx[1];
+          dxq1[VEC_SIZE * 2 + icount1] = dx[2];
           hiq1[icount1] = hi;
           hjq1[icount1] = hj;
           piq1[icount1] = pi;
@@ -1278,9 +1302,9 @@ void DOPAIR2(struct runner *r, struct cell *ci, struct cell *cj) {
 
             /* Add this interaction to the symmetric queue. */
             r2q2[icount2] = r2;
-            dxq2[3 * icount2 + 0] = dx[0];
-            dxq2[3 * icount2 + 1] = dx[1];
-            dxq2[3 * icount2 + 2] = dx[2];
+            dxq2[VEC_SIZE * 0 + icount2] = dx[0];
+            dxq2[VEC_SIZE * 1 + icount2] = dx[1];
+            dxq2[VEC_SIZE * 2 + icount2] = dx[2];
             hiq2[icount2] = hj;
             hjq2[icount2] = hi;
             piq2[icount2] = pj;
@@ -1297,9 +1321,9 @@ void DOPAIR2(struct runner *r, struct cell *ci, struct cell *cj) {
 
             /* Add this interaction to the non-symmetric queue. */
             r2q1[icount1] = r2;
-            dxq1[3 * icount1 + 0] = dx[0];
-            dxq1[3 * icount1 + 1] = dx[1];
-            dxq1[3 * icount1 + 2] = dx[2];
+            dxq1[VEC_SIZE * 0 + icount1] = dx[0];
+            dxq1[VEC_SIZE * 1 + icount1] = dx[1];
+            dxq1[VEC_SIZE * 2 + icount1] = dx[2];
             hiq1[icount1] = hj;
             hjq1[icount1] = hi;
             piq1[icount1] = pj;
@@ -1324,11 +1348,19 @@ void DOPAIR2(struct runner *r, struct cell *ci, struct cell *cj) {
 #ifdef VECTORIZE
   /* Pick up any leftovers. */
   if (icount1 > 0)
-    for (k = 0; k < icount1; k++)
-      IACT_NONSYM(r2q1[k], &dxq1[3 * k], hiq1[k], hjq1[k], piq1[k], pjq1[k]);
+    for (k = 0; k < icount1; k++) {
+      dx[0] = dxq1[VEC_SIZE * 0 + k];
+      dx[1] = dxq1[VEC_SIZE * 1 + k];
+      dx[2] = dxq1[VEC_SIZE * 2 + k];
+      IACT_NONSYM(r2q1[k], dx, hiq1[k], hjq1[k], piq1[k], pjq1[k]);
+    }
   if (icount2 > 0)
-    for (k = 0; k < icount2; k++)
-      IACT(r2q2[k], &dxq2[3 * k], hiq2[k], hjq2[k], piq2[k], pjq2[k]);
+    for (k = 0; k < icount2; k++) {
+      dx[0] = dxq2[VEC_SIZE * 0 + k];
+      dx[1] = dxq2[VEC_SIZE * 1 + k];
+      dx[2] = dxq2[VEC_SIZE * 2 + k];
+      IACT(r2q2[k], dx, hiq2[k], hjq2[k], piq2[k], pjq2[k]);
+    }
 #endif
 
   TIMER_TOC(TIMER_DOPAIR);
@@ -1417,9 +1449,9 @@ void DOSELF1(struct runner *r, struct cell *restrict c) {
 
           /* Add this interaction to the queue. */
           r2q1[icount1] = r2;
-          dxq1[3 * icount1 + 0] = dx[0];
-          dxq1[3 * icount1 + 1] = dx[1];
-          dxq1[3 * icount1 + 2] = dx[2];
+          dxq1[VEC_SIZE * 0 + icount1] = dx[0];
+          dxq1[VEC_SIZE * 1 + icount1] = dx[1];
+          dxq1[VEC_SIZE * 2 + icount1] = dx[2];
           hiq1[icount1] = hj;
           hjq1[icount1] = hi;
           piq1[icount1] = pj;
@@ -1484,9 +1516,9 @@ void DOSELF1(struct runner *r, struct cell *restrict c) {
 
             /* Add this interaction to the symmetric queue. */
             r2q2[icount2] = r2;
-            dxq2[3 * icount2 + 0] = dx[0];
-            dxq2[3 * icount2 + 1] = dx[1];
-            dxq2[3 * icount2 + 2] = dx[2];
+            dxq2[VEC_SIZE * 0 + icount2] = dx[0];
+            dxq2[VEC_SIZE * 1 + icount2] = dx[1];
+            dxq2[VEC_SIZE * 2 + icount2] = dx[2];
             hiq2[icount2] = hi;
             hjq2[icount2] = hj;
             piq2[icount2] = pi;
@@ -1503,9 +1535,9 @@ void DOSELF1(struct runner *r, struct cell *restrict c) {
 
             /* Add this interaction to the non-symmetric queue. */
             r2q1[icount1] = r2;
-            dxq1[3 * icount1 + 0] = dx[0];
-            dxq1[3 * icount1 + 1] = dx[1];
-            dxq1[3 * icount1 + 2] = dx[2];
+            dxq1[VEC_SIZE * 0 + icount1] = dx[0];
+            dxq1[VEC_SIZE * 1 + icount1] = dx[1];
+            dxq1[VEC_SIZE * 2 + icount1] = dx[2];
             hiq1[icount1] = hi;
             hjq1[icount1] = hj;
             piq1[icount1] = pi;
@@ -1522,9 +1554,9 @@ void DOSELF1(struct runner *r, struct cell *restrict c) {
 
             /* Add this interaction to the non-symmetric queue. */
             r2q1[icount1] = r2;
-            dxq1[3 * icount1 + 0] = -dx[0];
-            dxq1[3 * icount1 + 1] = -dx[1];
-            dxq1[3 * icount1 + 2] = -dx[2];
+            dxq1[VEC_SIZE * 0 + icount1] = -dx[0];
+            dxq1[VEC_SIZE * 1 + icount1] = -dx[1];
+            dxq1[VEC_SIZE * 2 + icount1] = -dx[2];
             hiq1[icount1] = hj;
             hjq1[icount1] = hi;
             piq1[icount1] = pj;
@@ -1549,11 +1581,19 @@ void DOSELF1(struct runner *r, struct cell *restrict c) {
 #ifdef VECTORIZE
   /* Pick up any leftovers. */
   if (icount1 > 0)
-    for (k = 0; k < icount1; k++)
-      IACT_NONSYM(r2q1[k], &dxq1[3 * k], hiq1[k], hjq1[k], piq1[k], pjq1[k]);
+    for (k = 0; k < icount1; k++) {
+      dx[0] = dxq1[VEC_SIZE * 0 + k];
+      dx[1] = dxq1[VEC_SIZE * 1 + k];
+      dx[2] = dxq1[VEC_SIZE * 2 + k];
+      IACT_NONSYM(r2q1[k], dx, hiq1[k], hjq1[k], piq1[k], pjq1[k]);
+    }
   if (icount2 > 0)
-    for (k = 0; k < icount2; k++)
-      IACT(r2q2[k], &dxq2[3 * k], hiq2[k], hjq2[k], piq2[k], pjq2[k]);
+    for (k = 0; k < icount2; k++) {
+      dx[0] = dxq2[VEC_SIZE * 0 + k];
+      dx[1] = dxq2[VEC_SIZE * 1 + k];
+      dx[2] = dxq2[VEC_SIZE * 2 + k];
+      IACT(r2q2[k], dx, hiq2[k], hjq2[k], piq2[k], pjq2[k]);
+    }
 #endif
 
   TIMER_TOC(TIMER_DOSELF);
@@ -1635,9 +1675,9 @@ void DOSELF2(struct runner *r, struct cell *restrict c) {
 
           /* Add this interaction to the queue. */
           r2q1[icount1] = r2;
-          dxq1[3 * icount1 + 0] = dx[0];
-          dxq1[3 * icount1 + 1] = dx[1];
-          dxq1[3 * icount1 + 2] = dx[2];
+          dxq1[VEC_SIZE * 0 + icount1] = dx[0];
+          dxq1[VEC_SIZE * 1 + icount1] = dx[1];
+          dxq1[VEC_SIZE * 2 + icount1] = dx[2];
           hiq1[icount1] = hj;
           hjq1[icount1] = hi;
           piq1[icount1] = pj;
@@ -1695,9 +1735,9 @@ void DOSELF2(struct runner *r, struct cell *restrict c) {
 
             /* Add this interaction to the symmetric queue. */
             r2q2[icount2] = r2;
-            dxq2[3 * icount2 + 0] = dx[0];
-            dxq2[3 * icount2 + 1] = dx[1];
-            dxq2[3 * icount2 + 2] = dx[2];
+            dxq2[VEC_SIZE * 0 + icount2] = dx[0];
+            dxq2[VEC_SIZE * 1 + icount2] = dx[1];
+            dxq2[VEC_SIZE * 2 + icount2] = dx[2];
             hiq2[icount2] = hi;
             hjq2[icount2] = hj;
             piq2[icount2] = pi;
@@ -1714,9 +1754,9 @@ void DOSELF2(struct runner *r, struct cell *restrict c) {
 
             /* Add this interaction to the non-symmetric queue. */
             r2q1[icount1] = r2;
-            dxq1[3 * icount1 + 0] = dx[0];
-            dxq1[3 * icount1 + 1] = dx[1];
-            dxq1[3 * icount1 + 2] = dx[2];
+            dxq1[VEC_SIZE * 0 + icount1] = dx[0];
+            dxq1[VEC_SIZE * 1 + icount1] = dx[1];
+            dxq1[VEC_SIZE * 2 + icount1] = dx[2];
             hiq1[icount1] = hi;
             hjq1[icount1] = hj;
             piq1[icount1] = pi;
@@ -1741,11 +1781,19 @@ void DOSELF2(struct runner *r, struct cell *restrict c) {
 #ifdef VECTORIZE
   /* Pick up any leftovers. */
   if (icount1 > 0)
-    for (k = 0; k < icount1; k++)
-      IACT_NONSYM(r2q1[k], &dxq1[3 * k], hiq1[k], hjq1[k], piq1[k], pjq1[k]);
+    for (k = 0; k < icount1; k++) {
+      dx[0] = dxq1[VEC_SIZE * 0 + k];
+      dx[1] = dxq1[VEC_SIZE * 1 + k];
+      dx[2] = dxq1[VEC_SIZE * 2 + k];
+      IACT_NONSYM(r2q1[k], dx, hiq1[k], hjq1[k], piq1[k], pjq1[k]);
+    }
   if (icount2 > 0)
-    for (k = 0; k < icount2; k++)
-      IACT(r2q2[k], &dxq2[3 * k], hiq2[k], hjq2[k], piq2[k], pjq2[k]);
+    for (k = 0; k < icount2; k++) {
+      dx[0] = dxq2[VEC_SIZE * 0 + k];
+      dx[1] = dxq2[VEC_SIZE * 1 + k];
+      dx[2] = dxq2[VEC_SIZE * 2 + k];
+      IACT(r2q2[k], dx, hiq2[k], hjq2[k], piq2[k], pjq2[k]);
+    }
 #endif
 
   TIMER_TOC(TIMER_DOSELF);

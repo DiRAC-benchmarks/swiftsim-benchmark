@@ -130,9 +130,6 @@ __attribute__((always_inline)) INLINE static void runner_iact_vec_density(
     vj[k].v = vec_set(pj[0]->v[k], pj[1]->v[k], pj[2]->v[k], pj[3]->v[k],
                       pj[4]->v[k], pj[5]->v[k], pj[6]->v[k], pj[7]->v[k]);
   }
-  for (k = 0; k < 3; k++)
-    dx[k].v = vec_set(Dx[0 + k], Dx[3 + k], Dx[6 + k], Dx[9 + k], Dx[12 + k],
-                      Dx[15 + k], Dx[18 + k], Dx[21 + k]);
 #elif VEC_SIZE == 4
   mi.v = vec_set(pi[0]->mass, pi[1]->mass, pi[2]->mass, pi[3]->mass);
   mj.v = vec_set(pj[0]->mass, pj[1]->mass, pj[2]->mass, pj[3]->mass);
@@ -140,9 +137,9 @@ __attribute__((always_inline)) INLINE static void runner_iact_vec_density(
     vi[k].v = vec_set(pi[0]->v[k], pi[1]->v[k], pi[2]->v[k], pi[3]->v[k]);
     vj[k].v = vec_set(pj[0]->v[k], pj[1]->v[k], pj[2]->v[k], pj[3]->v[k]);
   }
-  for (k = 0; k < 3; k++)
-    dx[k].v = vec_set(Dx[0 + k], Dx[3 + k], Dx[6 + k], Dx[9 + k]);
 #endif
+  for (k = 0; k < 3; k++)
+    dx[k].v = vec_load(Dx + VEC_SIZE * k);
 
   /* Get the radius and inverse radius. */
   r2.v = vec_load(R2);
@@ -294,18 +291,15 @@ __attribute__((always_inline))
     vj[k].v = vec_set(pj[0]->v[k], pj[1]->v[k], pj[2]->v[k], pj[3]->v[k],
                       pj[4]->v[k], pj[5]->v[k], pj[6]->v[k], pj[7]->v[k]);
   }
-  for (k = 0; k < 3; k++)
-    dx[k].v = vec_set(Dx[0 + k], Dx[3 + k], Dx[6 + k], Dx[9 + k], Dx[12 + k],
-                      Dx[15 + k], Dx[18 + k], Dx[21 + k]);
 #elif VEC_SIZE == 4
   mj.v = vec_set(pj[0]->mass, pj[1]->mass, pj[2]->mass, pj[3]->mass);
   for (k = 0; k < 3; k++) {
     vi[k].v = vec_set(pi[0]->v[k], pi[1]->v[k], pi[2]->v[k], pi[3]->v[k]);
     vj[k].v = vec_set(pj[0]->v[k], pj[1]->v[k], pj[2]->v[k], pj[3]->v[k]);
   }
-  for (k = 0; k < 3; k++)
-    dx[k].v = vec_set(Dx[0 + k], Dx[3 + k], Dx[6 + k], Dx[9 + k]);
 #endif
+  for (k = 0; k < 3; k++)
+    dx[k].v = vec_load(Dx + VEC_SIZE * k);
 
   /* Get the radius and inverse radius. */
   r2.v = vec_load(R2);
@@ -524,9 +518,6 @@ __attribute__((always_inline)) INLINE static void runner_iact_vec_force(
     vj[k].v = vec_set(pj[0]->v[k], pj[1]->v[k], pj[2]->v[k], pj[3]->v[k],
                       pj[4]->v[k], pj[5]->v[k], pj[6]->v[k], pj[7]->v[k]);
   }
-  for (k = 0; k < 3; k++)
-    dx[k].v = vec_set(Dx[0 + k], Dx[3 + k], Dx[6 + k], Dx[9 + k], Dx[12 + k],
-                      Dx[15 + k], Dx[18 + k], Dx[21 + k]);
   balsara.v =
       vec_set(pi[0]->force.balsara, pi[1]->force.balsara, pi[2]->force.balsara,
               pi[3]->force.balsara, pi[4]->force.balsara, pi[5]->force.balsara,
@@ -561,8 +552,6 @@ __attribute__((always_inline)) INLINE static void runner_iact_vec_force(
     vi[k].v = vec_set(pi[0]->v[k], pi[1]->v[k], pi[2]->v[k], pi[3]->v[k]);
     vj[k].v = vec_set(pj[0]->v[k], pj[1]->v[k], pj[2]->v[k], pj[3]->v[k]);
   }
-  for (k = 0; k < 3; k++)
-    dx[k].v = vec_set(Dx[0 + k], Dx[3 + k], Dx[6 + k], Dx[9 + k]);
   balsara.v = vec_set(pi[0]->force.balsara, pi[1]->force.balsara,
                       pi[2]->force.balsara, pi[3]->force.balsara) +
               vec_set(pj[0]->force.balsara, pj[1]->force.balsara,
@@ -572,6 +561,8 @@ __attribute__((always_inline)) INLINE static void runner_iact_vec_force(
 #else
 #error
 #endif
+  for (k = 0; k < 3; k++)
+    dx[k].v = vec_load(Dx + VEC_SIZE * k);
 
   /* Get the radius and inverse radius. */
   r2.v = vec_load(R2);
@@ -832,9 +823,6 @@ __attribute__((always_inline)) INLINE static void runner_iact_nonsym_vec_force(
     vj[k].v = vec_set(pj[0]->v[k], pj[1]->v[k], pj[2]->v[k], pj[3]->v[k],
                       pj[4]->v[k], pj[5]->v[k], pj[6]->v[k], pj[7]->v[k]);
   }
-  for (k = 0; k < 3; k++)
-    dx[k].v = vec_set(Dx[0 + k], Dx[3 + k], Dx[6 + k], Dx[9 + k], Dx[12 + k],
-                      Dx[15 + k], Dx[18 + k], Dx[21 + k]);
   balsara.v =
       vec_set(pi[0]->force.balsara, pi[1]->force.balsara, pi[2]->force.balsara,
               pi[3]->force.balsara, pi[4]->force.balsara, pi[5]->force.balsara,
@@ -868,8 +856,6 @@ __attribute__((always_inline)) INLINE static void runner_iact_nonsym_vec_force(
     vi[k].v = vec_set(pi[0]->v[k], pi[1]->v[k], pi[2]->v[k], pi[3]->v[k]);
     vj[k].v = vec_set(pj[0]->v[k], pj[1]->v[k], pj[2]->v[k], pj[3]->v[k]);
   }
-  for (k = 0; k < 3; k++)
-    dx[k].v = vec_set(Dx[0 + k], Dx[3 + k], Dx[6 + k], Dx[9 + k]);
   balsara.v = vec_set(pi[0]->force.balsara, pi[1]->force.balsara,
                       pi[2]->force.balsara, pi[3]->force.balsara) +
               vec_set(pj[0]->force.balsara, pj[1]->force.balsara,
@@ -879,6 +865,8 @@ __attribute__((always_inline)) INLINE static void runner_iact_nonsym_vec_force(
 #else
 #error
 #endif
+  for (k = 0; k < 3; k++)
+    dx[k].v = vec_load(Dx + VEC_SIZE * k);
 
   /* Get the radius and inverse radius. */
   r2.v = vec_load(R2);
