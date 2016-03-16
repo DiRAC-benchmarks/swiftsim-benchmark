@@ -47,8 +47,8 @@ void runner_dopair_grav_new(struct runner *r, struct cell *ci,
   struct multipole m;
 #ifdef VECTORIZE
   int icount = 0;
-  float r2q[VEC_SIZE] __attribute__((aligned(16)));
-  float dxq[3 * VEC_SIZE] __attribute__((aligned(16)));
+  float r2q[VEC_SIZE] __attribute__((aligned(sizeof(vector))));
+  float dxq[3 * VEC_SIZE] __attribute__((aligned(sizeof(vector))));
   struct gpart *piq[VEC_SIZE], *pjq[VEC_SIZE];
 #endif
   TIMER_TIC
@@ -342,8 +342,8 @@ void runner_dopair_grav(struct runner *r, struct cell *restrict ci,
   const int ti_current = r->e->ti_current;
 #ifdef VECTORIZE
   int icount = 0;
-  float r2q[VEC_SIZE] __attribute__((aligned(16)));
-  float dxq[3 * VEC_SIZE] __attribute__((aligned(16)));
+  float r2q[VEC_SIZE] __attribute__((aligned(sizeof(vector))));
+  float dxq[3 * VEC_SIZE] __attribute__((aligned(sizeof(vector))));
   struct gpart *piq[VEC_SIZE], *pjq[VEC_SIZE];
 #endif
   TIMER_TIC
@@ -441,8 +441,8 @@ void runner_doself_grav(struct runner *r, struct cell *restrict c) {
   const int ti_current = r->e->ti_current;
 #ifdef VECTORIZE
   int icount = 0;
-  float r2q[VEC_SIZE] __attribute__((aligned(16)));
-  float dxq[3 * VEC_SIZE] __attribute__((aligned(16)));
+  float r2q[VEC_SIZE] __attribute__((aligned(sizeof(vector))));
+  float dxq[3 * VEC_SIZE] __attribute__((aligned(sizeof(vector))));
   struct gpart *piq[VEC_SIZE], *pjq[VEC_SIZE];
 #endif
   TIMER_TIC

@@ -114,10 +114,10 @@ void DOPAIR_NAIVE(struct runner *r, struct cell *restrict ci,
   const int ti_current = e->ti_current;
 #ifdef VECTORIZE
   int icount = 0;
-  float r2q[VEC_SIZE] __attribute__((aligned(16)));
-  float hiq[VEC_SIZE] __attribute__((aligned(16)));
-  float hjq[VEC_SIZE] __attribute__((aligned(16)));
-  float dxq[3 * VEC_SIZE] __attribute__((aligned(16)));
+  float r2q[VEC_SIZE] __attribute__((aligned(sizeof(vector))));
+  float hiq[VEC_SIZE] __attribute__((aligned(sizeof(vector))));
+  float hjq[VEC_SIZE] __attribute__((aligned(sizeof(vector))));
+  float dxq[3 * VEC_SIZE] __attribute__((aligned(sizeof(vector))));
   struct part *piq[VEC_SIZE], *pjq[VEC_SIZE];
 #endif
   TIMER_TIC
@@ -215,10 +215,10 @@ void DOSELF_NAIVE(struct runner *r, struct cell *restrict c) {
   const int ti_current = r->e->ti_current;
 #ifdef VECTORIZE
   int icount = 0;
-  float r2q[VEC_SIZE] __attribute__((aligned(16)));
-  float hiq[VEC_SIZE] __attribute__((aligned(16)));
-  float hjq[VEC_SIZE] __attribute__((aligned(16)));
-  float dxq[3 * VEC_SIZE] __attribute__((aligned(16)));
+  float r2q[VEC_SIZE] __attribute__((aligned(sizeof(vector))));
+  float hiq[VEC_SIZE] __attribute__((aligned(sizeof(vector))));
+  float hjq[VEC_SIZE] __attribute__((aligned(sizeof(vector))));
+  float dxq[3 * VEC_SIZE] __attribute__((aligned(sizeof(vector))));
   struct part *piq[VEC_SIZE], *pjq[VEC_SIZE];
 #endif
   TIMER_TIC
@@ -358,10 +358,10 @@ void DOPAIR_SUBSET(struct runner *r, struct cell *restrict ci,
   struct entry *sort_j;
 #ifdef VECTORIZE
   int icount = 0;
-  float r2q[VEC_SIZE] __attribute__((aligned(16)));
-  float hiq[VEC_SIZE] __attribute__((aligned(16)));
-  float hjq[VEC_SIZE] __attribute__((aligned(16)));
-  float dxq[3 * VEC_SIZE] __attribute__((aligned(16)));
+  float r2q[VEC_SIZE] __attribute__((aligned(sizeof(vector))));
+  float hiq[VEC_SIZE] __attribute__((aligned(sizeof(vector))));
+  float hjq[VEC_SIZE] __attribute__((aligned(sizeof(vector))));
+  float dxq[3 * VEC_SIZE] __attribute__((aligned(sizeof(vector))));
   struct part *piq[VEC_SIZE], *pjq[VEC_SIZE];
 #endif
   TIMER_TIC
@@ -557,10 +557,10 @@ void DOPAIR_SUBSET_NAIVE(struct runner *r, struct cell *restrict ci,
   float dx[3], hi, hig2, r2;
 #ifdef VECTORIZE
   int icount = 0;
-  float r2q[VEC_SIZE] __attribute__((aligned(16)));
-  float hiq[VEC_SIZE] __attribute__((aligned(16)));
-  float hjq[VEC_SIZE] __attribute__((aligned(16)));
-  float dxq[3 * VEC_SIZE] __attribute__((aligned(16)));
+  float r2q[VEC_SIZE] __attribute__((aligned(sizeof(vector))));
+  float hiq[VEC_SIZE] __attribute__((aligned(sizeof(vector))));
+  float hjq[VEC_SIZE] __attribute__((aligned(sizeof(vector))));
+  float dxq[3 * VEC_SIZE] __attribute__((aligned(sizeof(vector))));
   struct part *piq[VEC_SIZE], *pjq[VEC_SIZE];
 #endif
   TIMER_TIC
@@ -666,10 +666,10 @@ void DOSELF_SUBSET(struct runner *r, struct cell *restrict ci,
   float dx[3], hi, hig2, r2;
 #ifdef VECTORIZE
   int icount = 0;
-  float r2q[VEC_SIZE] __attribute__((aligned(16)));
-  float hiq[VEC_SIZE] __attribute__((aligned(16)));
-  float hjq[VEC_SIZE] __attribute__((aligned(16)));
-  float dxq[3 * VEC_SIZE] __attribute__((aligned(16)));
+  float r2q[VEC_SIZE] __attribute__((aligned(sizeof(vector))));
+  float hiq[VEC_SIZE] __attribute__((aligned(sizeof(vector))));
+  float hjq[VEC_SIZE] __attribute__((aligned(sizeof(vector))));
+  float dxq[3 * VEC_SIZE] __attribute__((aligned(sizeof(vector))));
   struct part *piq[VEC_SIZE], *pjq[VEC_SIZE];
 #endif
   TIMER_TIC
@@ -771,10 +771,10 @@ void DOPAIR1(struct runner *r, struct cell *ci, struct cell *cj) {
   const int ti_current = e->ti_current;
 #ifdef VECTORIZE
   int icount = 0;
-  float r2q[VEC_SIZE] __attribute__((aligned(16)));
-  float hiq[VEC_SIZE] __attribute__((aligned(16)));
-  float hjq[VEC_SIZE] __attribute__((aligned(16)));
-  float dxq[3 * VEC_SIZE] __attribute__((aligned(16)));
+  float r2q[VEC_SIZE] __attribute__((aligned(sizeof(vector))));
+  float hiq[VEC_SIZE] __attribute__((aligned(sizeof(vector))));
+  float hjq[VEC_SIZE] __attribute__((aligned(sizeof(vector))));
+  float dxq[3 * VEC_SIZE] __attribute__((aligned(sizeof(vector))));
   struct part *piq[VEC_SIZE], *pjq[VEC_SIZE];
 #endif
   TIMER_TIC
@@ -961,16 +961,16 @@ void DOPAIR2(struct runner *r, struct cell *ci, struct cell *cj) {
   const int ti_current = e->ti_current;
 #ifdef VECTORIZE
   int icount1 = 0;
-  float r2q1[VEC_SIZE] __attribute__((aligned(16)));
-  float hiq1[VEC_SIZE] __attribute__((aligned(16)));
-  float hjq1[VEC_SIZE] __attribute__((aligned(16)));
-  float dxq1[3 * VEC_SIZE] __attribute__((aligned(16)));
+  float r2q1[VEC_SIZE] __attribute__((aligned(sizeof(vector))));
+  float hiq1[VEC_SIZE] __attribute__((aligned(sizeof(vector))));
+  float hjq1[VEC_SIZE] __attribute__((aligned(sizeof(vector))));
+  float dxq1[3 * VEC_SIZE] __attribute__((aligned(sizeof(vector))));
   struct part *piq1[VEC_SIZE], *pjq1[VEC_SIZE];
   int icount2 = 0;
-  float r2q2[VEC_SIZE] __attribute__((aligned(16)));
-  float hiq2[VEC_SIZE] __attribute__((aligned(16)));
-  float hjq2[VEC_SIZE] __attribute__((aligned(16)));
-  float dxq2[3 * VEC_SIZE] __attribute__((aligned(16)));
+  float r2q2[VEC_SIZE] __attribute__((aligned(sizeof(vector))));
+  float hiq2[VEC_SIZE] __attribute__((aligned(sizeof(vector))));
+  float hjq2[VEC_SIZE] __attribute__((aligned(sizeof(vector))));
+  float dxq2[3 * VEC_SIZE] __attribute__((aligned(sizeof(vector))));
   struct part *piq2[VEC_SIZE], *pjq2[VEC_SIZE];
 #endif
   TIMER_TIC
@@ -1351,16 +1351,16 @@ void DOSELF1(struct runner *r, struct cell *restrict c) {
   int firstdt = 0, countdt = 0, *indt = NULL, doj;
 #ifdef VECTORIZE
   int icount1 = 0;
-  float r2q1[VEC_SIZE] __attribute__((aligned(16)));
-  float hiq1[VEC_SIZE] __attribute__((aligned(16)));
-  float hjq1[VEC_SIZE] __attribute__((aligned(16)));
-  float dxq1[3 * VEC_SIZE] __attribute__((aligned(16)));
+  float r2q1[VEC_SIZE] __attribute__((aligned(sizeof(vector))));
+  float hiq1[VEC_SIZE] __attribute__((aligned(sizeof(vector))));
+  float hjq1[VEC_SIZE] __attribute__((aligned(sizeof(vector))));
+  float dxq1[3 * VEC_SIZE] __attribute__((aligned(sizeof(vector))));
   struct part *piq1[VEC_SIZE], *pjq1[VEC_SIZE];
   int icount2 = 0;
-  float r2q2[VEC_SIZE] __attribute__((aligned(16)));
-  float hiq2[VEC_SIZE] __attribute__((aligned(16)));
-  float hjq2[VEC_SIZE] __attribute__((aligned(16)));
-  float dxq2[3 * VEC_SIZE] __attribute__((aligned(16)));
+  float r2q2[VEC_SIZE] __attribute__((aligned(sizeof(vector))));
+  float hiq2[VEC_SIZE] __attribute__((aligned(sizeof(vector))));
+  float hjq2[VEC_SIZE] __attribute__((aligned(sizeof(vector))));
+  float dxq2[3 * VEC_SIZE] __attribute__((aligned(sizeof(vector))));
   struct part *piq2[VEC_SIZE], *pjq2[VEC_SIZE];
 #endif
   TIMER_TIC
@@ -1569,16 +1569,16 @@ void DOSELF2(struct runner *r, struct cell *restrict c) {
   int firstdt = 0, countdt = 0, *indt = NULL;
 #ifdef VECTORIZE
   int icount1 = 0;
-  float r2q1[VEC_SIZE] __attribute__((aligned(16)));
-  float hiq1[VEC_SIZE] __attribute__((aligned(16)));
-  float hjq1[VEC_SIZE] __attribute__((aligned(16)));
-  float dxq1[3 * VEC_SIZE] __attribute__((aligned(16)));
+  float r2q1[VEC_SIZE] __attribute__((aligned(sizeof(vector))));
+  float hiq1[VEC_SIZE] __attribute__((aligned(sizeof(vector))));
+  float hjq1[VEC_SIZE] __attribute__((aligned(sizeof(vector))));
+  float dxq1[3 * VEC_SIZE] __attribute__((aligned(sizeof(vector))));
   struct part *piq1[VEC_SIZE], *pjq1[VEC_SIZE];
   int icount2 = 0;
-  float r2q2[VEC_SIZE] __attribute__((aligned(16)));
-  float hiq2[VEC_SIZE] __attribute__((aligned(16)));
-  float hjq2[VEC_SIZE] __attribute__((aligned(16)));
-  float dxq2[3 * VEC_SIZE] __attribute__((aligned(16)));
+  float r2q2[VEC_SIZE] __attribute__((aligned(sizeof(vector))));
+  float hiq2[VEC_SIZE] __attribute__((aligned(sizeof(vector))));
+  float hjq2[VEC_SIZE] __attribute__((aligned(sizeof(vector))));
+  float dxq2[3 * VEC_SIZE] __attribute__((aligned(sizeof(vector))));
   struct part *piq2[VEC_SIZE], *pjq2[VEC_SIZE];
 #endif
   TIMER_TIC

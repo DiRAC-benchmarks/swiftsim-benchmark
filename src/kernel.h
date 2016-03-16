@@ -230,7 +230,7 @@ __attribute__((always_inline))
   (4.0 / 3.0 * M_PI *const_eta_kernel *const_eta_kernel *const_eta_kernel * \
    6.0858f)
 static float kernel_coeffs[(kernel_degree + 1) * (kernel_ivals + 1)]
-    __attribute__((aligned(16))) = {
+    __attribute__((aligned(sizeof(vector)))) = {
         3.0 / 4.0 * M_1_PI, -3.0 / 2.0 * M_1_PI, 0.0,           M_1_PI,
         -0.25 * M_1_PI,     3.0 / 2.0 * M_1_PI,  -3.0 * M_1_PI, M_2_PI,
         0.0,                0.0,                 0.0,           0.0};
@@ -325,7 +325,7 @@ __attribute__((always_inline)) INLINE static void kernel_eval(float x,
   (4.0 / 3.0 * M_PI *const_eta_kernel *const_eta_kernel *const_eta_kernel * \
    8.2293f)
 static float kernel_coeffs[(kernel_degree + 1) * (kernel_ivals + 1)]
-    __attribute__((aligned(16))) = {
+    __attribute__((aligned(sizeof(vector)))) = {
         3.0 / 10.0 * M_1_PI,  0.0,                  -3.0 / 4.0 * M_1_PI,
         0.0,                  23.0 / 32.0 * M_1_PI, -1.0 / 5.0 * M_1_PI,
         M_1_PI,               -3.0 / 2.0 * M_1_PI,  0.25 * M_1_PI,
@@ -424,7 +424,7 @@ __attribute__((always_inline)) INLINE static void kernel_eval(float x,
   (4.0 / 3.0 * M_PI *const_eta_kernel *const_eta_kernel *const_eta_kernel * \
    10.5868f)
 static float kernel_coeffs[(kernel_degree + 1) * (kernel_ivals + 1)]
-    __attribute__((aligned(16))) = {
+    __attribute__((aligned(sizeof(vector)))) = {
         -1.0 / 12.0 * M_1_PI,  1.0 / 4.0 * M_1_PI,   0.0,
         -1.0 / 2.0 * M_1_PI,   0.0,                  11.0 / 20.0 * M_1_PI,
         1.0 / 24.0 * M_1_PI,   -3.0 / 8.0 * M_1_PI,  5.0 / 4.0 * M_1_PI,
@@ -524,7 +524,7 @@ __attribute__((always_inline)) INLINE static void kernel_eval(float x,
   (4.0 / 3.0 * M_PI *const_eta_kernel *const_eta_kernel *const_eta_kernel * \
    7.261825f)
 static float kernel_coeffs[(kernel_degree + 1) * (kernel_ivals + 1)]
-    __attribute__((aligned(16))) = {
+    __attribute__((aligned(sizeof(vector)))) = {
         0.05222272f, -0.39167037f, 1.04445431f, -1.04445431f, 0.f,  0.41778173f,
         0.0f,        0.0f,         0.0f,        0.0f,         0.0f, 0.0f};
 #define kernel_root (kernel_coeffs[kernel_degree])

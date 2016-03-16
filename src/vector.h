@@ -79,7 +79,7 @@
                             _mm512_set1_epi64(ptrs[0])),                    \
       1)
 #define vec_gather(base, offsets) _mm512_i32gather_ps(offsets.m, base, 1)
-#elif defined(NO__AVX__)
+#elif defined(__AVX__)
 #define VECTORIZE
 #define VEC_SIZE 8
 #define VEC_FLOAT __m256
@@ -111,7 +111,7 @@
 #define VEC_HAVE_GATHER
 #define vec_gather(base, offsets) _mm256_i32gather_ps(base, offsets.m, 1)
 #endif
-#elif defined(NO__SSE2__)
+#elif defined(__SSE2__)
 #define VECTORIZE
 #define VEC_SIZE 4
 #define VEC_FLOAT __m128
