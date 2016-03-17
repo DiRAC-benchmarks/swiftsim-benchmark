@@ -760,7 +760,7 @@ __attribute__((always_inline)) INLINE static void runner_iact_nonsym_force(
  * @brief Force loop (Vectorized non-symmetric version)
  */
 
-__attribute__((always_inline)) INLINE static void runner_iact_nonsym_vec_force(
+static void runner_iact_nonsym_vec_force(
     float *R2, float *Dx, float *Hi, float *Hj, struct part **pi,
     struct part **pj) {
 
