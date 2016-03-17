@@ -21,7 +21,7 @@
 
 #include <stdbool.h>
 
-typedef double cell_cache_float;
+typedef float cell_cache_float;
 
 struct cell_cache_data {
   cell_cache_float *parts_xs[3];

@@ -20,6 +20,7 @@
 
 /* Includes. */
 #include "cell.h"
+#include "cell_cache.h"
 #include "part.h"
 
 /* Before including this file, define FUNCTION, which is the
@@ -358,9 +359,16 @@ void DOPAIR_SUBSET(struct runner *r, struct cell *restrict ci,
                    struct cell *restrict cj) {
 
   struct engine *e = r->e;
+#if !defined(NO_CELL_CACHE) && defined(VECTORIZE)
+  int pid, pjd, sid, x, k, count_j = cj->count, flipped;
+#else
   int pid, pjd, sid, k, count_j = cj->count, flipped;
+#endif
   double shift[3] = {0.0, 0.0, 0.0};
   struct part *restrict pi, *restrict pj, *restrict parts_j = cj->parts;
+#if !defined(NO_CELL_CACHE) && defined(VECTORIZE)
+  float *parts_j_xs[3];
+#endif
   double pix[3];
   float dx[3], hi, hig2, r2, di, dxj;
   struct entry *sort_j;
@@ -406,6 +414,15 @@ void DOPAIR_SUBSET(struct runner *r, struct cell *restrict ci,
   sort_j = &cj->sort[sid * (cj->count + 1)];
   dxj = cj->dx_max;
 
+#if !defined(NO_CELL_CACHE) && defined(VECTORIZE)
+  struct cell_cache_data *cache_j = cell_cache_single(r, cj, sid);
+
+  /* Pick-out the position cache. */
+  for (k = 0; k < 3; k++) {
+    parts_j_xs[k] = cache_j->parts_xs[k];
+  }
+#endif
+
   /* Parts are on the left? */
   if (!flipped) {
 
@@ -421,8 +438,91 @@ void DOPAIR_SUBSET(struct runner *r, struct cell *restrict ci,
            pix[1] * runner_shift[3 * sid + 1] +
            pix[2] * runner_shift[3 * sid + 2];
 
+#if !defined(NO_CELL_CACHE) && defined(VECTORIZE)
+      vector vf_pix[3];
+      for (k = 0; k < 3; k++) vf_pix[k].v = vec_set1(pix[k]);
+
+      vector vf_hig2;
+      vf_hig2.v = vec_set1(hig2 + 6*sqrt(3)*FLT_EPSILON*hi*(pix[0]+pix[1]+pix[2]));
+
+      int pjd_max = exit_from_left(sort_j, count_j, di);
+      int pjd_align = pjd_max - (pjd_max % VEC_SIZE);
+      for (pjd = 0; pjd < pjd_align; pjd += VEC_SIZE) {
+        vector vf_pjx[3], vf_dx[3];
+        for (k = 0; k < 3; k++) vf_pjx[k].v = vec_load(&parts_j_xs[k][pjd]);
+        for (k = 0; k < 3; k++) vf_dx[k].v = vf_pix[k].v - vf_pjx[k].v;
+
+        vector vf_r2;
+        vf_r2.v = vf_dx[0].v * vf_dx[0].v;
+        for (k = 1; k < 3; k++) vf_r2.v += vf_dx[k].v * vf_dx[k].v;
+
+        vector vf_mask;
+        vf_mask.v = vec_cmp_lt(vf_r2.v, vf_hig2.v);
+        int mask = vec_cmp_result(vf_mask.v);
+
+        if (mask != 0) {
+          int x_hi = CHAR_BIT*sizeof(int) - __builtin_clz(mask);
+          for (x = __builtin_ctz(mask); x < x_hi; x++) {
+            if (mask & (1 << x)) {
+              pj = &parts_j[sort_j[pjd+x].i];
+
+              r2 = 0.0f;
+              for (k = 0; k < 3; k++) {
+                dx[k] = pix[k] - pj->x[k];
+                r2 += dx[k] * dx[k];
+              }
+
+              if (r2 >= hig2) continue;
+
+              r2q[icount] = r2;
+              dxq[VEC_SIZE * 0 + icount] = dx[0];
+              dxq[VEC_SIZE * 1 + icount] = dx[1];
+              dxq[VEC_SIZE * 2 + icount] = dx[2];
+              hiq[icount] = hi;
+              hjq[icount] = pj->h;
+              piq[icount] = pi;
+              pjq[icount] = pj;
+              icount += 1;
+
+              if (icount == VEC_SIZE) {
+                IACT_NONSYM_VEC(r2q, dxq, hiq, hjq, piq, pjq);
+                icount = 0;
+              }
+            }
+          }
+        }
+      }
+
+      for (pjd = pjd_align; pjd < pjd_max; pjd++) {
+        pj = &parts_j[sort_j[pjd].i];
+
+        r2 = 0.0f;
+        for (k = 0; k < 3; k++) {
+          dx[k] = pix[k] - pj->x[k];
+          r2 += dx[k] * dx[k];
+        }
+
+        if (r2 < hig2) {
+          r2q[icount] = r2;
+          dxq[VEC_SIZE * 0 + icount] = dx[0];
+          dxq[VEC_SIZE * 1 + icount] = dx[1];
+          dxq[VEC_SIZE * 2 + icount] = dx[2];
+          hiq[icount] = hi;
+          hjq[icount] = pj->h;
+          piq[icount] = pi;
+          pjq[icount] = pj;
+          icount += 1;
+
+          if (icount == VEC_SIZE) {
+            IACT_NONSYM_VEC(r2q, dxq, hiq, hjq, piq, pjq);
+            icount = 0;
+          }
+        }
+      }
+#else /* if !defined(NO_CELL_CACHE) && defined(VECTORIZE) */
       /* Loop over the parts in cj. */
-      for (pjd = 0; pjd < count_j && sort_j[pjd].d < di; pjd++) {
+      int pjd_max = exit_from_left(sort_j, count_j, di);
+      for (pjd = 0; pjd < pjd_max; pjd++) {
 
         /* Get a pointer to the jth particle. */
         pj = &parts_j[sort_j[pjd].i];
@@ -464,6 +564,7 @@ void DOPAIR_SUBSET(struct runner *r, struct cell *restrict ci,
         }
 
       } /* loop over the parts in cj. */
+#endif /* if !defined(NO_CELL_CACHE) && defined(VECTORIZE) */
 
     } /* loop over the parts in ci. */
 
@@ -484,8 +585,127 @@ void DOPAIR_SUBSET(struct runner *r, struct cell *restrict ci,
            pix[1] * runner_shift[3 * sid + 1] +
            pix[2] * runner_shift[3 * sid + 2];
 
+#if !defined(NO_CELL_CACHE) && defined(VECTORIZE)
+      int pjd_min = 1 + exit_from_right(sort_j, count_j, di);
+      int pjd_align1, pjd_align2;
+
+      pjd_align2 = count_j - count_j % VEC_SIZE;
+      if (pjd_min % VEC_SIZE != 0) {
+        pjd_align1 = pjd_min - pjd_min % VEC_SIZE + VEC_SIZE;
+        pjd_align1 = pjd_align1 < count_j ? pjd_align1 : count_j;
+      } else {
+        pjd_align1 = pjd_min;
+      }
+
+      for (pjd = pjd_min; pjd < pjd_align1; pjd++) {
+        pj = &parts_j[sort_j[pjd].i];
+
+        r2 = 0.0f;
+        for (k = 0; k < 3; k++) {
+          dx[k] = pix[k] - pj->x[k];
+          r2 += dx[k] * dx[k];
+        }
+
+        if (r2 < hig2) {
+          r2q[icount] = r2;
+          dxq[VEC_SIZE * 0 + icount] = dx[0];
+          dxq[VEC_SIZE * 1 + icount] = dx[1];
+          dxq[VEC_SIZE * 2 + icount] = dx[2];
+          hiq[icount] = hi;
+          hjq[icount] = pj->h;
+          piq[icount] = pi;
+          pjq[icount] = pj;
+          icount += 1;
+
+          if (icount == VEC_SIZE) {
+            IACT_NONSYM_VEC(r2q, dxq, hiq, hjq, piq, pjq);
+            icount = 0;
+          }
+        }
+      }
+
+      vector vf_pix[3];
+      for (k = 0; k < 3; k++) vf_pix[k].v = vec_set1(pix[k]);
+
+      vector vf_hig2;
+      vf_hig2.v = vec_set1(hig2 + 6*sqrt(3)*FLT_EPSILON*hi*(pix[0]+pix[1]+pix[2]));
+
+      for (pjd = pjd_align1; pjd < pjd_align2; pjd += VEC_SIZE) {
+        vector vf_pjx[3], vf_dx[3];
+        for (k = 0; k < 3; k++) vf_pjx[k].v = vec_load(&parts_j_xs[k][pjd]);
+        for (k = 0; k < 3; k++) vf_dx[k].v = vf_pix[k].v - vf_pjx[k].v;
+
+        vector vf_r2;
+        vf_r2.v = vf_dx[0].v * vf_dx[0].v;
+        for (k = 1; k < 3; k++) vf_r2.v += vf_dx[k].v * vf_dx[k].v;
+
+        vector vf_mask;
+        vf_mask.v = vec_cmp_lt(vf_r2.v, vf_hig2.v);
+        int mask = vec_cmp_result(vf_mask.v);
+
+        if (mask != 0) {
+          int x_hi = CHAR_BIT*sizeof(int) - __builtin_clz(mask);
+          for (x = __builtin_ctz(mask); x < x_hi; x++) {
+            if (mask & (1 << x)) {
+              pj = &parts_j[sort_j[pjd+x].i];
+
+              r2 = 0.0f;
+              for (k = 0; k < 3; k++) {
+                dx[k] = pix[k] - pj->x[k];
+                r2 += dx[k] * dx[k];
+              }
+
+              if (r2 >= hig2) continue;
+
+              r2q[icount] = r2;
+              dxq[VEC_SIZE * 0 + icount] = dx[0];
+              dxq[VEC_SIZE * 1 + icount] = dx[1];
+              dxq[VEC_SIZE * 2 + icount] = dx[2];
+              hiq[icount] = hi;
+              hjq[icount] = pj->h;
+              piq[icount] = pi;
+              pjq[icount] = pj;
+              icount += 1;
+
+              if (icount == VEC_SIZE) {
+                IACT_NONSYM_VEC(r2q, dxq, hiq, hjq, piq, pjq);
+                icount = 0;
+              }
+            }
+          }
+        }
+      }
+
+      for (pjd = pjd_align2; pjd < count_j; pjd++) {
+        pj = &parts_j[sort_j[pjd].i];
+
+        r2 = 0.0f;
+        for (k = 0; k < 3; k++) {
+          dx[k] = pix[k] - pj->x[k];
+          r2 += dx[k] * dx[k];
+        }
+
+        if (r2 < hig2) {
+          r2q[icount] = r2;
+          dxq[VEC_SIZE * 0 + icount] = dx[0];
+          dxq[VEC_SIZE * 1 + icount] = dx[1];
+          dxq[VEC_SIZE * 2 + icount] = dx[2];
+          hiq[icount] = hi;
+          hjq[icount] = pj->h;
+          piq[icount] = pi;
+          pjq[icount] = pj;
+          icount += 1;
+
+          if (icount == VEC_SIZE) {
+            IACT_NONSYM_VEC(r2q, dxq, hiq, hjq, piq, pjq);
+            icount = 0;
+          }
+        }
+      }
+#else /* if !defined(NO_CELL_CACHE) && defined(VECTORIZE) */
       /* Loop over the parts in cj. */
-      for (pjd = count_j - 1; pjd >= 0 && di < sort_j[pjd].d; pjd--) {
+      int pjd_min = 1 + exit_from_right(sort_j, count_j, di);
+      for (pjd = pjd_min; pjd < count_j; pjd++) {
 
         /* Get a pointer to the jth particle. */
         pj = &parts_j[sort_j[pjd].i];
@@ -527,6 +747,7 @@ void DOPAIR_SUBSET(struct runner *r, struct cell *restrict ci,
         }
 
       } /* loop over the parts in cj. */
+#endif /* if !defined(NO_CELL_CACHE) && defined(VECTORIZE) */
 
     } /* loop over the parts in ci. */
   }
@@ -779,10 +1000,17 @@ void DOSELF_SUBSET(struct runner *r, struct cell *restrict ci,
 void DOPAIR1(struct runner *r, struct cell *ci, struct cell *cj) {
 
   struct engine *restrict e = r->e;
+#if !defined(NO_CELL_CACHE) && defined(VECTORIZE)
+  int pid, pjd, x, k, sid;
+#else
   int pid, pjd, k, sid;
+#endif
   double rshift, shift[3] = {0.0, 0.0, 0.0};
   struct entry *restrict sort_i, *restrict sort_j;
   struct part *restrict pi, *restrict pj, *restrict parts_i, *restrict parts_j;
+#if !defined(NO_CELL_CACHE) && defined(VECTORIZE)
+  float *parts_i_xs[3], *parts_j_xs[3];
+#endif
   double pix[3], pjx[3], di, dj;
   float dx[3], hi, hig2, hj, hjg2, r2, dx_max;
   double hi_max, hj_max;
@@ -817,6 +1045,17 @@ void DOPAIR1(struct runner *r, struct cell *ci, struct cell *cj) {
   sort_i = &ci->sort[sid * (ci->count + 1)];
   sort_j = &cj->sort[sid * (cj->count + 1)];
 
+#if !defined(NO_CELL_CACHE) && defined(VECTORIZE)
+  struct cell_cache_data *cache_i, *cache_j;
+  cell_cache_pair(r, &cache_i, ci, &cache_j, cj, sid);
+
+  /* Pick-out the position cache. */
+  for (k = 0; k < 3; k++) {
+    parts_i_xs[k] = cache_i->parts_xs[k];
+    parts_j_xs[k] = cache_j->parts_xs[k];
+  }
+#endif
+
   /* Get some other useful values. */
   hi_max = ci->h_max * kernel_gamma - rshift;
   hj_max = cj->h_max * kernel_gamma;
@@ -829,8 +1068,8 @@ void DOPAIR1(struct runner *r, struct cell *ci, struct cell *cj) {
   dx_max = (ci->dx_max + cj->dx_max);
 
   /* Loop over the parts in ci. */
-  int pid_min = exit_from_right(sort_i, count_i, dj_min - hi_max - dx_max);
-  for (pid = pid_min+1; pid < count_i; pid++) {
+  int pid_min = 1 + exit_from_right(sort_i, count_i, dj_min - hi_max - dx_max);
+  for (pid = pid_min; pid < count_i; pid++) {
 
     /* Get a hold of the ith part in ci. */
     pi = &parts_i[sort_i[pid].i];
@@ -842,6 +1081,88 @@ void DOPAIR1(struct runner *r, struct cell *ci, struct cell *cj) {
     hig2 = hi * hi * kernel_gamma2;
     for (k = 0; k < 3; k++) pix[k] = pi->x[k] - shift[k];
 
+#if !defined(NO_CELL_CACHE) && defined(VECTORIZE)
+    vector vf_pix[3];
+    for (k = 0; k < 3; k++) vf_pix[k].v = vec_set1(pix[k]);
+
+    vector vf_hig2;
+    vf_hig2.v = vec_set1(hig2 + 6*sqrt(3)*FLT_EPSILON*hi*(pix[0]+pix[1]+pix[2]));
+
+    int pjd_max = exit_from_left(sort_j, count_j, di);
+    int pjd_align = pjd_max - (pjd_max % VEC_SIZE);
+    for (pjd = 0; pjd < pjd_align; pjd += VEC_SIZE) {
+      vector vf_pjx[3], vf_dx[3];
+      for (k = 0; k < 3; k++) vf_pjx[k].v = vec_load(&parts_j_xs[k][pjd]);
+      for (k = 0; k < 3; k++) vf_dx[k].v = vf_pix[k].v - vf_pjx[k].v;
+
+      vector vf_r2;
+      vf_r2.v = vf_dx[0].v * vf_dx[0].v;
+      for (k = 1; k < 3; k++) vf_r2.v += vf_dx[k].v * vf_dx[k].v;
+
+      vector vf_mask;
+      vf_mask.v = vec_cmp_lt(vf_r2.v, vf_hig2.v);
+      int mask = vec_cmp_result(vf_mask.v);
+
+      if (mask != 0) {
+        int x_hi = CHAR_BIT*sizeof(int) - __builtin_clz(mask);
+        for (x = __builtin_ctz(mask); x < x_hi; x++) {
+          if (mask & (1 << x)) {
+            pj = &parts_j[sort_j[pjd+x].i];
+
+            r2 = 0.0f;
+            for (k = 0; k < 3; k++) {
+              dx[k] = pix[k] - pj->x[k];
+              r2 += dx[k] * dx[k];
+            }
+
+            if (r2 >= hig2) continue;
+
+            r2q[icount] = r2;
+            dxq[VEC_SIZE * 0 + icount] = dx[0];
+            dxq[VEC_SIZE * 1 + icount] = dx[1];
+            dxq[VEC_SIZE * 2 + icount] = dx[2];
+            hiq[icount] = hi;
+            hjq[icount] = pj->h;
+            piq[icount] = pi;
+            pjq[icount] = pj;
+            icount += 1;
+
+            if (icount == VEC_SIZE) {
+              IACT_NONSYM_VEC(r2q, dxq, hiq, hjq, piq, pjq);
+              icount = 0;
+            }
+          }
+        }
+      }
+    }
+
+    for (pjd = pjd_align; pjd < pjd_max; pjd++) {
+      pj = &parts_j[sort_j[pjd].i];
+
+      r2 = 0.0f;
+      for (k = 0; k < 3; k++) {
+        dx[k] = pix[k] - pj->x[k];
+        r2 += dx[k] * dx[k];
+      }
+
+      if (r2 < hig2) {
+        r2q[icount] = r2;
+        dxq[VEC_SIZE * 0 + icount] = dx[0];
+        dxq[VEC_SIZE * 1 + icount] = dx[1];
+        dxq[VEC_SIZE * 2 + icount] = dx[2];
+        hiq[icount] = hi;
+        hjq[icount] = pj->h;
+        piq[icount] = pi;
+        pjq[icount] = pj;
+        icount += 1;
+
+        if (icount == VEC_SIZE) {
+          IACT_NONSYM_VEC(r2q, dxq, hiq, hjq, piq, pjq);
+          icount = 0;
+        }
+      }
+    }
+#else /* if !defined(NO_CELL_CACHE) && defined(VECTORIZE) */
     /* Loop over the parts in cj. */
     int pjd_max = exit_from_left(sort_j, count_j, di);
     for (pjd = 0; pjd < pjd_max; pjd++) {
@@ -886,6 +1207,7 @@ void DOPAIR1(struct runner *r, struct cell *ci, struct cell *cj) {
       }
 
     } /* loop over the parts in cj. */
+#endif /* if !defined(NO_CELL_CACHE) && defined(VECTORIZE) */
 
   } /* loop over the parts in ci. */
 
@@ -907,9 +1229,127 @@ void DOPAIR1(struct runner *r, struct cell *ci, struct cell *cj) {
     for (k = 0; k < 3; k++) pjx[k] = pj->x[k] + shift[k];
     hjg2 = hj * hj * kernel_gamma2;
 
+#if !defined(NO_CELL_CACHE) && defined(VECTORIZE)
+    int pid_min = 1 + exit_from_right(sort_i, count_i, dj);
+    int pid_align1, pid_align2;
+
+    pid_align2 = count_i - count_i % VEC_SIZE;
+    if (pid_min % VEC_SIZE != 0) {
+      pid_align1 = pid_min - pid_min % VEC_SIZE + VEC_SIZE;
+      pid_align1 = pid_align1 < count_i ? pid_align1 : count_i;
+    } else {
+      pid_align1 = pid_min;
+    }
+
+    for (pid = pid_min; pid < pid_align1; pid++) {
+      pi = &parts_i[sort_i[pid].i];
+
+      r2 = 0.0f;
+      for (k = 0; k < 3; k++) {
+        dx[k] = pjx[k] - pi->x[k];
+        r2 += dx[k] * dx[k];
+      }
+
+      if (r2 < hjg2) {
+        r2q[icount] = r2;
+        dxq[VEC_SIZE * 0 + icount] = dx[0];
+        dxq[VEC_SIZE * 1 + icount] = dx[1];
+        dxq[VEC_SIZE * 2 + icount] = dx[2];
+        hiq[icount] = hj;
+        hjq[icount] = pi->h;
+        piq[icount] = pj;
+        pjq[icount] = pi;
+        icount += 1;
+
+        if (icount == VEC_SIZE) {
+          IACT_NONSYM_VEC(r2q, dxq, hiq, hjq, piq, pjq);
+          icount = 0;
+        }
+      }
+    }
+
+    vector vf_pjx[3];
+    for (k = 0; k < 3; k++) vf_pjx[k].v = vec_set1(pjx[k]);
+
+    vector vf_hjg2;
+    vf_hjg2.v = vec_set1(hjg2 + 6*sqrt(3)*FLT_EPSILON*hj*(pjx[0]+pjx[1]+pjx[2]));
+
+    for (pid = pid_align1; pid < pid_align2; pid += VEC_SIZE) {
+      vector vf_pix[3], vf_dx[3];
+      for (k = 0; k < 3; k++) vf_pix[k].v = vec_load(&parts_i_xs[k][pid]);
+      for (k = 0; k < 3; k++) vf_dx[k].v = vf_pjx[k].v - vf_pix[k].v;
+
+      vector vf_r2;
+      vf_r2.v = vf_dx[0].v * vf_dx[0].v;
+      for (k = 1; k < 3; k++) vf_r2.v += vf_dx[k].v * vf_dx[k].v;
+
+      vector vf_mask;
+      vf_mask.v = vec_cmp_lt(vf_r2.v, vf_hjg2.v);
+      int mask = vec_cmp_result(vf_mask.v);
+
+      if (mask != 0) {
+        int x_hi = CHAR_BIT*sizeof(int) - __builtin_clz(mask);
+        for (x = __builtin_ctz(mask); x < x_hi; x++) {
+          if (mask & (1 << x)) {
+            pi = &parts_i[sort_i[pid+x].i];
+
+            r2 = 0.0f;
+            for (k = 0; k < 3; k++) {
+              dx[k] = pjx[k] - pi->x[k];
+              r2 += dx[k] * dx[k];
+            }
+
+            if (r2 >= hjg2) continue;
+
+            r2q[icount] = r2;
+            dxq[VEC_SIZE * 0 + icount] = dx[0];
+            dxq[VEC_SIZE * 1 + icount] = dx[1];
+            dxq[VEC_SIZE * 2 + icount] = dx[2];
+            hiq[icount] = hj;
+            hjq[icount] = pi->h;
+            piq[icount] = pj;
+            pjq[icount] = pi;
+            icount += 1;
+
+            if (icount == VEC_SIZE) {
+              IACT_NONSYM_VEC(r2q, dxq, hiq, hjq, piq, pjq);
+              icount = 0;
+            }
+          }
+        }
+      }
+    }
+
+    for (pid = pid_align2; pid < count_i; pid++) {
+      pi = &parts_i[sort_i[pid].i];
+
+      r2 = 0.0f;
+      for (k = 0; k < 3; k++) {
+        dx[k] = pjx[k] - pi->x[k];
+        r2 += dx[k] * dx[k];
+      }
+
+      if (r2 < hjg2) {
+        r2q[icount] = r2;
+        dxq[VEC_SIZE * 0 + icount] = dx[0];
+        dxq[VEC_SIZE * 1 + icount] = dx[1];
+        dxq[VEC_SIZE * 2 + icount] = dx[2];
+        hiq[icount] = hj;
+        hjq[icount] = pi->h;
+        piq[icount] = pj;
+        pjq[icount] = pi;
+        icount += 1;
+
+        if (icount == VEC_SIZE) {
+          IACT_NONSYM_VEC(r2q, dxq, hiq, hjq, piq, pjq);
+          icount = 0;
+        }
+      }
+    }
+#else /* if !defined(NO_CELL_CACHE) && defined(VECTORIZE) */
     /* Loop over the parts in ci. */
-    int pid_min = exit_from_right(sort_i, count_i, dj);
-    for (pid = pid_min+1; pid < count_i; pid++) {
+    int pid_min = 1 + exit_from_right(sort_i, count_i, dj);
+    for (pid = pid_min; pid < count_i; pid++) {
 
       /* Get a pointer to the jth particle. */
       pi = &parts_i[sort_i[pid].i];
@@ -951,6 +1391,7 @@ void DOPAIR1(struct runner *r, struct cell *ci, struct cell *cj) {
       }
 
     } /* loop over the parts in cj. */
+#endif /* if !defined(NO_CELL_CACHE) && defined(VECTORIZE) */
 
   } /* loop over the parts in ci. */
 
@@ -971,12 +1412,19 @@ void DOPAIR1(struct runner *r, struct cell *ci, struct cell *cj) {
 void DOPAIR2(struct runner *r, struct cell *ci, struct cell *cj) {
 
   struct engine *restrict e = r->e;
+#if !defined(NO_CELL_CACHE) && defined(VECTORIZE)
+  int pid, pjd, x, k, sid;
+#else
   int pid, pjd, k, sid;
+#endif
   double rshift, shift[3] = {0.0, 0.0, 0.0};
   struct entry *sort_i, *sort_j;
   struct entry *sortdt_i = NULL, *sortdt_j = NULL;
   int countdt_i = 0, countdt_j = 0;
   struct part *restrict pi, *restrict pj, *restrict parts_i, *restrict parts_j;
+#if !defined(NO_CELL_CACHE) && defined(VECTORIZE)
+  float *parts_i_xs[3], *parts_j_xs[3];
+#endif
   double pix[3], pjx[3], di, dj;
   float dx[3], hi, hig2, hj, hjg2, r2, dx_max;
   double hi_max, hj_max;
@@ -1016,6 +1464,17 @@ void DOPAIR2(struct runner *r, struct cell *ci, struct cell *cj) {
   /* Pick-out the sorted lists. */
   sort_i = &ci->sort[sid * (ci->count + 1)];
   sort_j = &cj->sort[sid * (cj->count + 1)];
+
+#if !defined(NO_CELL_CACHE) && defined(VECTORIZE)
+  struct cell_cache_data *cache_i, *cache_j;
+  cell_cache_pair(r, &cache_i, ci, &cache_j, cj, sid);
+
+  /* Pick-out the position cache. */
+  for (k = 0; k < 3; k++) {
+    parts_i_xs[k] = cache_i->parts_xs[k];
+    parts_j_xs[k] = cache_j->parts_xs[k];
+  }
+#endif
 
   /* Get some other useful values. */
   hi_max = ci->h_max * kernel_gamma - rshift;
@@ -1057,8 +1516,8 @@ void DOPAIR2(struct runner *r, struct cell *ci, struct cell *cj) {
   }
 
   /* Loop over the parts in ci. */
-  int pid_min = exit_from_right(sort_i, count_i, dj_min - hi_max - dx_max);
-  for (pid = pid_min+1; pid < count_i; pid++) {
+  int pid_min = 1 + exit_from_right(sort_i, count_i, dj_min - hi_max - dx_max);
+  for (pid = pid_min; pid < count_i; pid++) {
 
     /* Get a hold of the ith part in ci. */
     pi = &parts_i[sort_i[pid].i];
@@ -1123,6 +1582,125 @@ void DOPAIR2(struct runner *r, struct cell *ci, struct cell *cj) {
     /* Otherwise, look at all parts. */
     else {
 
+#if !defined(NO_CELL_CACHE) && defined(VECTORIZE)
+      vector vf_pix[3];
+      for (k = 0; k < 3; k++) vf_pix[k].v = vec_set1(pix[k]);
+
+      vector vf_hig2;
+      vf_hig2.v = vec_set1(hig2 + 6*sqrt(3)*FLT_EPSILON*hi*(pix[0]+pix[1]+pix[2]));
+
+      int pjd_max = exit_from_left(sort_j, count_j, di);
+      int pjd_align = pjd_max - pjd_max % VEC_SIZE;
+      for (pjd = 0; pjd < pjd_align; pjd += VEC_SIZE) {
+        vector vf_pjx[3], vf_dx[3];
+        for (k = 0; k < 3; k++) vf_pjx[k].v = vec_load(&parts_j_xs[k][pjd]);
+        for (k = 0; k < 3; k++) vf_dx[k].v = vf_pix[k].v - vf_pjx[k].v;
+
+        vector vf_r2;
+        vf_r2.v = vf_dx[0].v * vf_dx[0].v;
+        for (k = 1; k < 3; k++) vf_r2.v += vf_dx[k].v * vf_dx[k].v;
+
+        vector vf_mask;
+        vf_mask.v = vec_cmp_lt(vf_r2.v, vf_hig2.v);
+        int mask = vec_cmp_result(vf_mask.v);
+
+        if (mask != 0) {
+          int x_hi = CHAR_BIT*sizeof(int) - __builtin_clz(mask);
+          for (x = __builtin_ctz(mask); x < x_hi; x++) {
+            if (mask & (1 << x)) {
+              pj = &parts_j[sort_j[pjd+x].i];
+              hj = pj->h;
+
+              r2 = 0.0f;
+              for (k = 0; k < 3; k++) {
+                dx[k] = pix[k] - pj->x[k];
+                r2 += dx[k] * dx[k];
+              }
+
+              if (r2 >= hig2) continue;
+
+              if (pj->ti_end <= ti_current) {
+                r2q2[icount2] = r2;
+                dxq2[VEC_SIZE * 0 + icount2] = dx[0];
+                dxq2[VEC_SIZE * 1 + icount2] = dx[1];
+                dxq2[VEC_SIZE * 2 + icount2] = dx[2];
+                hiq2[icount2] = hi;
+                hjq2[icount2] = hj;
+                piq2[icount2] = pi;
+                pjq2[icount2] = pj;
+                icount2 += 1;
+
+                if (icount2 == VEC_SIZE) {
+                  IACT_VEC(r2q2, dxq2, hiq2, hjq2, piq2, pjq2);
+                  icount2 = 0;
+                }
+              } else {
+                r2q1[icount1] = r2;
+                dxq1[VEC_SIZE * 0 + icount1] = dx[0];
+                dxq1[VEC_SIZE * 1 + icount1] = dx[1];
+                dxq1[VEC_SIZE * 2 + icount1] = dx[2];
+                hiq1[icount1] = hi;
+                hjq1[icount1] = hj;
+                piq1[icount1] = pi;
+                pjq1[icount1] = pj;
+                icount1 += 1;
+
+                if (icount1 == VEC_SIZE) {
+                  IACT_NONSYM_VEC(r2q1, dxq1, hiq1, hjq1, piq1, pjq1);
+                  icount1 = 0;
+                }
+              }
+            }
+          }
+        }
+      }
+
+      for (pjd = pjd_align; pjd < pjd_max; pjd++) {
+        pj = &parts_j[sort_j[pjd].i];
+
+        r2 = 0.0f;
+        for (k = 0; k < 3; k++) {
+          dx[k] = pix[k] - pj->x[k];
+          r2 += dx[k] * dx[k];
+        }
+
+        if (r2 < hig2) {
+          hj = pj->h;
+
+          if (pj->ti_end <= ti_current) {
+            r2q2[icount2] = r2;
+            dxq2[VEC_SIZE * 0 + icount2] = dx[0];
+            dxq2[VEC_SIZE * 1 + icount2] = dx[1];
+            dxq2[VEC_SIZE * 2 + icount2] = dx[2];
+            hiq2[icount2] = hi;
+            hjq2[icount2] = hj;
+            piq2[icount2] = pi;
+            pjq2[icount2] = pj;
+            icount2 += 1;
+
+            if (icount2 == VEC_SIZE) {
+              IACT_VEC(r2q2, dxq2, hiq2, hjq2, piq2, pjq2);
+              icount2 = 0;
+            }
+          } else {
+            r2q1[icount1] = r2;
+            dxq1[VEC_SIZE * 0 + icount1] = dx[0];
+            dxq1[VEC_SIZE * 1 + icount1] = dx[1];
+            dxq1[VEC_SIZE * 2 + icount1] = dx[2];
+            hiq1[icount1] = hi;
+            hjq1[icount1] = hj;
+            piq1[icount1] = pi;
+            pjq1[icount1] = pj;
+            icount1 += 1;
+
+            if (icount1 == VEC_SIZE) {
+              IACT_NONSYM_VEC(r2q1, dxq1, hiq1, hjq1, piq1, pjq1);
+              icount1 = 0;
+            }
+          }
+        }
+      }
+#else /* if !defined(NO_CELL_CACHE) && defined(VECTORIZE) */
       /* Loop over the parts in cj. */
       int pjd_max = exit_from_left(sort_j, count_j, di);
       for (pjd = 0; pjd < pjd_max; pjd++) {
@@ -1195,6 +1773,7 @@ void DOPAIR2(struct runner *r, struct cell *ci, struct cell *cj) {
         }
 
       } /* loop over the parts in cj. */
+#endif /* if !defined(NO_CELL_CACHE) && defined(VECTORIZE) */
     }
 
   } /* loop over the parts in ci. */
@@ -1220,8 +1799,8 @@ void DOPAIR2(struct runner *r, struct cell *ci, struct cell *cj) {
     if (pj->ti_end > ti_current) {
 
       /* Loop over the parts in ci. */
-      int pid_min = exit_from_right(sortdt_i, countdt_i, dj);
-      for (pid = pid_min+1; pid < countdt_i; pid++) {
+      int pid_min = 1 + exit_from_right(sortdt_i, countdt_i, dj);
+      for (pid = pid_min; pid < countdt_i; pid++) {
 
         /* Get a pointer to the jth particle. */
         pi = &parts_i[sortdt_i[pid].i];
@@ -1269,9 +1848,189 @@ void DOPAIR2(struct runner *r, struct cell *ci, struct cell *cj) {
     /* Otherwise, interact with all particles in cj. */
     else {
 
+#if !defined(NO_CELL_CACHE) && defined(VECTORIZE)
+      int pid_min = 1 + exit_from_right(sort_i, count_i, dj);
+      int pid_align1, pid_align2;
+
+      pid_align2 = count_i - count_i % VEC_SIZE;
+      if (pid_min % VEC_SIZE != 0) {
+        pid_align1 = pid_min - pid_min % VEC_SIZE + VEC_SIZE;
+        pid_align1 = pid_align1 < count_i ? pid_align1 : count_i;
+      } else {
+        pid_align1 = pid_min;
+      }
+
+      for (pid = pid_min; pid < pid_align1; pid++) {
+        pi = &parts_i[sort_i[pid].i];
+
+        r2 = 0.0f;
+        for (k = 0; k < 3; k++) {
+          dx[k] = pjx[k] - pi->x[k];
+          r2 += dx[k] * dx[k];
+        }
+
+        if (r2 < hjg2) {
+          hi = pi->h;
+
+          if (r2 > hi * hi * kernel_gamma2) {
+            if (pi->ti_end <= ti_current) {
+              r2q2[icount2] = r2;
+              dxq2[VEC_SIZE * 0 + icount2] = dx[0];
+              dxq2[VEC_SIZE * 1 + icount2] = dx[1];
+              dxq2[VEC_SIZE * 2 + icount2] = dx[2];
+              hiq2[icount2] = hj;
+              hjq2[icount2] = hi;
+              piq2[icount2] = pj;
+              pjq2[icount2] = pi;
+              icount2 += 1;
+
+              if (icount2 == VEC_SIZE) {
+                IACT_VEC(r2q2, dxq2, hiq2, hjq2, piq2, pjq2);
+                icount2 = 0;
+              }
+            } else {
+              r2q1[icount1] = r2;
+              dxq1[VEC_SIZE * 0 + icount1] = dx[0];
+              dxq1[VEC_SIZE * 1 + icount1] = dx[1];
+              dxq1[VEC_SIZE * 2 + icount1] = dx[2];
+              hiq1[icount1] = hj;
+              hjq1[icount1] = hi;
+              piq1[icount1] = pj;
+              pjq1[icount1] = pi;
+              icount1 += 1;
+
+              if (icount1 == VEC_SIZE) {
+                IACT_NONSYM_VEC(r2q1, dxq1, hiq1, hjq1, piq1, pjq1);
+                icount1 = 0;
+              }
+            }
+          }
+        }
+      }
+
+      vector vf_pjx[3];
+      for (k = 0; k < 3; k++) vf_pjx[k].v = vec_set1(pjx[k]);
+
+      vector vf_hjg2;
+      vf_hjg2.v = vec_set1(hjg2 + 6*sqrt(3)*FLT_EPSILON*hj*(pjx[0]+pjx[1]+pjx[2]));
+
+      for (pid = pid_align1; pid < pid_align2; pid += VEC_SIZE) {
+        vector vf_pix[3], vf_dx[3];
+        for (k = 0; k < 3; k++) vf_pix[k].v = vec_load(&parts_i_xs[k][pid]);
+        for (k = 0; k < 3; k++) vf_dx[k].v = vf_pjx[k].v - vf_pix[k].v;
+
+        vector vf_r2;
+        vf_r2.v = vf_dx[0].v * vf_dx[0].v;
+        for (k = 1; k < 3; k++) vf_r2.v += vf_dx[k].v * vf_dx[k].v;
+
+        vector vf_mask;
+        vf_mask.v = vec_cmp_lt(vf_r2.v, vf_hjg2.v);
+        int mask = vec_cmp_result(vf_mask.v);
+
+        if (mask != 0) {
+          int x_hi = CHAR_BIT*sizeof(int) - __builtin_clz(mask);
+          for (x = __builtin_ctz(mask); x < x_hi; x++) {
+            if (mask & (1 << x)) {
+              pi = &parts_i[sort_i[pid+x].i];
+              hi = pi->h;
+
+              r2 = 0.0f;
+              for (k = 0; k < 3; k++) {
+                dx[k] = pjx[k] - pi->x[k];
+                r2 += dx[k] * dx[k];
+              }
+
+              if (r2 >= hjg2) continue;
+
+              if (r2 > hi * hi * kernel_gamma2) {
+                if (pi->ti_end <= ti_current) {
+                  r2q2[icount2] = r2;
+                  dxq2[VEC_SIZE * 0 + icount2] = dx[0];
+                  dxq2[VEC_SIZE * 1 + icount2] = dx[1];
+                  dxq2[VEC_SIZE * 2 + icount2] = dx[2];
+                  hiq2[icount2] = hj;
+                  hjq2[icount2] = hi;
+                  piq2[icount2] = pj;
+                  pjq2[icount2] = pi;
+                  icount2 += 1;
+
+                  if (icount2 == VEC_SIZE) {
+                    IACT_VEC(r2q2, dxq2, hiq2, hjq2, piq2, pjq2);
+                    icount2 = 0;
+                  }
+                } else {
+                  r2q1[icount1] = r2;
+                  dxq1[VEC_SIZE * 0 + icount1] = dx[0];
+                  dxq1[VEC_SIZE * 1 + icount1] = dx[1];
+                  dxq1[VEC_SIZE * 2 + icount1] = dx[2];
+                  hiq1[icount1] = hj;
+                  hjq1[icount1] = hi;
+                  piq1[icount1] = pj;
+                  pjq1[icount1] = pi;
+                  icount1 += 1;
+
+                  if (icount1 == VEC_SIZE) {
+                    IACT_NONSYM_VEC(r2q1, dxq1, hiq1, hjq1, piq1, pjq1);
+                    icount1 = 0;
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+
+      for (pid = pid_align2; pid < count_i; pid++) {
+        pi = &parts_i[sort_i[pid].i];
+
+        r2 = 0.0f;
+        for (k = 0; k < 3; k++) {
+          dx[k] = pjx[k] - pi->x[k];
+          r2 += dx[k] * dx[k];
+        }
+
+        if (r2 < hjg2) {
+          hi = pi->h;
+
+          if (r2 > hi * hi * kernel_gamma2) {
+            if (pi->ti_end <= ti_current) {
+              r2q2[icount2] = r2;
+              dxq2[VEC_SIZE * 0 + icount2] = dx[0];
+              dxq2[VEC_SIZE * 1 + icount2] = dx[1];
+              dxq2[VEC_SIZE * 2 + icount2] = dx[2];
+              hiq2[icount2] = hj;
+              hjq2[icount2] = hi;
+              piq2[icount2] = pj;
+              pjq2[icount2] = pi;
+              icount2 += 1;
+
+              if (icount2 == VEC_SIZE) {
+                IACT_VEC(r2q2, dxq2, hiq2, hjq2, piq2, pjq2);
+                icount2 = 0;
+              }
+            } else {
+              r2q1[icount1] = r2;
+              dxq1[VEC_SIZE * 0 + icount1] = dx[0];
+              dxq1[VEC_SIZE * 1 + icount1] = dx[1];
+              dxq1[VEC_SIZE * 2 + icount1] = dx[2];
+              hiq1[icount1] = hj;
+              hjq1[icount1] = hi;
+              piq1[icount1] = pj;
+              pjq1[icount1] = pi;
+              icount1 += 1;
+
+              if (icount1 == VEC_SIZE) {
+                IACT_NONSYM_VEC(r2q1, dxq1, hiq1, hjq1, piq1, pjq1);
+                icount1 = 0;
+              }
+            }
+          }
+        }
+      }
+#else /* if !defined(NO_CELL_CACHE) && defined(VECTORIZE) */
       /* Loop over the parts in ci. */
-      int pid_min = exit_from_right(sort_i, count_i, dj);
-      for (pid = pid_min+1; pid < count_i; pid++) {
+      int pid_min = 1 + exit_from_right(sort_i, count_i, dj);
+      for (pid = pid_min; pid < count_i; pid++) {
 
         /* Get a pointer to the jth particle. */
         pi = &parts_i[sort_i[pid].i];
@@ -1341,26 +2100,29 @@ void DOPAIR2(struct runner *r, struct cell *ci, struct cell *cj) {
         }
 
       } /* loop over the parts in cj. */
+#endif /* if !defined(NO_CELL_CACHE) && defined(VECTORIZE) */
     }
 
   } /* loop over the parts in ci. */
 
 #ifdef VECTORIZE
   /* Pick up any leftovers. */
-  if (icount1 > 0)
+  if (icount1 > 0) {
     for (k = 0; k < icount1; k++) {
       dx[0] = dxq1[VEC_SIZE * 0 + k];
       dx[1] = dxq1[VEC_SIZE * 1 + k];
       dx[2] = dxq1[VEC_SIZE * 2 + k];
       IACT_NONSYM(r2q1[k], dx, hiq1[k], hjq1[k], piq1[k], pjq1[k]);
     }
-  if (icount2 > 0)
+  }
+  if (icount2 > 0) {
     for (k = 0; k < icount2; k++) {
       dx[0] = dxq2[VEC_SIZE * 0 + k];
       dx[1] = dxq2[VEC_SIZE * 1 + k];
       dx[2] = dxq2[VEC_SIZE * 2 + k];
       IACT(r2q2[k], dx, hiq2[k], hjq2[k], piq2[k], pjq2[k]);
     }
+  }
 #endif
 
   TIMER_TOC(TIMER_DOPAIR);
@@ -1580,20 +2342,22 @@ void DOSELF1(struct runner *r, struct cell *restrict c) {
 
 #ifdef VECTORIZE
   /* Pick up any leftovers. */
-  if (icount1 > 0)
+  if (icount1 > 0) {
     for (k = 0; k < icount1; k++) {
       dx[0] = dxq1[VEC_SIZE * 0 + k];
       dx[1] = dxq1[VEC_SIZE * 1 + k];
       dx[2] = dxq1[VEC_SIZE * 2 + k];
       IACT_NONSYM(r2q1[k], dx, hiq1[k], hjq1[k], piq1[k], pjq1[k]);
     }
-  if (icount2 > 0)
+  }
+  if (icount2 > 0) {
     for (k = 0; k < icount2; k++) {
       dx[0] = dxq2[VEC_SIZE * 0 + k];
       dx[1] = dxq2[VEC_SIZE * 1 + k];
       dx[2] = dxq2[VEC_SIZE * 2 + k];
       IACT(r2q2[k], dx, hiq2[k], hjq2[k], piq2[k], pjq2[k]);
     }
+  }
 #endif
 
   TIMER_TOC(TIMER_DOSELF);
@@ -1780,20 +2544,22 @@ void DOSELF2(struct runner *r, struct cell *restrict c) {
 
 #ifdef VECTORIZE
   /* Pick up any leftovers. */
-  if (icount1 > 0)
+  if (icount1 > 0) {
     for (k = 0; k < icount1; k++) {
       dx[0] = dxq1[VEC_SIZE * 0 + k];
       dx[1] = dxq1[VEC_SIZE * 1 + k];
       dx[2] = dxq1[VEC_SIZE * 2 + k];
       IACT_NONSYM(r2q1[k], dx, hiq1[k], hjq1[k], piq1[k], pjq1[k]);
     }
-  if (icount2 > 0)
+  }
+  if (icount2 > 0) {
     for (k = 0; k < icount2; k++) {
       dx[0] = dxq2[VEC_SIZE * 0 + k];
       dx[1] = dxq2[VEC_SIZE * 1 + k];
       dx[2] = dxq2[VEC_SIZE * 2 + k];
       IACT(r2q2[k], dx, hiq2[k], hjq2[k], piq2[k], pjq2[k]);
     }
+  }
 #endif
 
   TIMER_TOC(TIMER_DOSELF);
