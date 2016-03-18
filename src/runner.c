@@ -80,6 +80,66 @@ const char runner_flip[27] = {1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0,
 /* Import the gravity loop functions. */
 #include "runner_doiact_grav.h"
 
+/* For benchmark only. */
+#include <time.h>
+
+struct benchmark_data {
+  uint64_t flops;
+  uint64_t ticks;
+  uint64_t ticks_begin;
+} __attribute__((aligned(64)));
+
+static int benchmark_nr_threads;
+static struct benchmark_data *benchmark_data;
+
+void benchmark_init(int nr_threads) {
+  benchmark_nr_threads = nr_threads;
+  benchmark_data = calloc(nr_threads, sizeof *benchmark_data);
+}
+
+long double benchmark_result(void) {
+  // Total FLOP rate, via the harmonic mean
+  long double sum = 0.L;
+  for (int i = 0; i < benchmark_nr_threads; ++i) {
+    sum += (long double)benchmark_data[i].ticks / benchmark_data[i].flops;
+  }
+
+  int nr_threads = benchmark_nr_threads;
+
+#ifdef WITH_MPI
+  int nr_ranks;
+  MPI_Comm_size(MPI_COMM_WORLD, &nr_ranks);
+  nr_threads *= nr_ranks;
+
+  MPI_Allreduce(MPI_IN_PLACE, &sum, 1, MPI_LONG_DOUBLE, MPI_SUM,
+      MPI_COMM_WORLD);
+#endif
+
+  long double arithmetic_mean = sum / nr_threads;
+  return nr_threads / arithmetic_mean;
+}
+
+const char* benchmark_units(void) {
+  return "GFLOPS/s"; // = FLOPs/ns
+}
+
+void benchmark_interval_begin(struct runner* r) {
+  struct timespec tm;
+  clock_gettime(CLOCK_MONOTONIC_RAW, &tm);
+  uint64_t nsec = (uint64_t)tm.tv_sec * 1000000000ul + tm.tv_nsec;
+
+  benchmark_data[r->id].ticks_begin = nsec;
+}
+
+void benchmark_interval_end(struct runner* r, uint64_t flops) {
+  struct timespec tm;
+  clock_gettime(CLOCK_MONOTONIC_RAW, &tm);
+  uint64_t nsec = (uint64_t)tm.tv_sec * 1000000000ul + tm.tv_nsec;
+
+  benchmark_data[r->id].ticks += nsec - benchmark_data[r->id].ticks_begin;
+  benchmark_data[r->id].flops += flops;
+}
+
 /**
  * @brief Sort the entries in ascending order using QuickSort.
  *
@@ -671,6 +731,9 @@ void runner_dodrift(struct runner *r, struct cell *c, int timer) {
 
   /* No children? */
   if (!c->split) {
+    /* For benchmark only. */
+    benchmark_interval_begin(r);
+    uint64_t flops = 0;
 
     /* Loop over all the particles in the cell */
     for (int k = 0; k < nr_parts; k++) {
@@ -680,47 +743,53 @@ void runner_dodrift(struct runner *r, struct cell *c, int timer) {
       xp = &xparts[k];
 
       /* Useful quantity */
-      const float h_inv = 1.0f / p->h;
+      const float h_inv = 1.0f / p->h;                                          // 1xRECIP
 
       /* Drift... */
-      p->x[0] += xp->v_full[0] * dt;
-      p->x[1] += xp->v_full[1] * dt;
-      p->x[2] += xp->v_full[2] * dt;
+      p->x[0] += xp->v_full[0] * dt;                                            // 1xADD, 1xMUL
+      p->x[1] += xp->v_full[1] * dt;                                            // 1xADD, 1xMUL
+      p->x[2] += xp->v_full[2] * dt;                                            // 1xADD, 1xMUL
 
       /* Predict velocities (for hydro terms) */
-      p->v[0] += p->a_hydro[0] * dt;
-      p->v[1] += p->a_hydro[1] * dt;
-      p->v[2] += p->a_hydro[2] * dt;
+      p->v[0] += p->a_hydro[0] * dt;                                            // 1xADD, 1xMUL
+      p->v[1] += p->a_hydro[1] * dt;                                            // 1xADD, 1xMUL
+      p->v[2] += p->a_hydro[2] * dt;                                            // 1xADD, 1xMUL
 
       /* Predict smoothing length */
-      w = p->h_dt * h_inv * dt;
-      if (fabsf(w) < 0.2f)
-        p->h *= approx_expf(w); /* 4th order expansion of exp(w) */
+      w = p->h_dt * h_inv * dt;                                                 // 2xMUL
+      if (fabsf(w) < 0.2f)                                                      // 1xFABS, 1xCMP
+        p->h *= approx_expf(w); /* 4th order expansion of exp(w) */             // 10xFLOP
       else
-        p->h *= expf(w);
+        p->h *= expf(w);                                                        // "0xFLOP"
 
       /* Predict density */
-      w = -3.0f * p->h_dt * h_inv * dt;
+      w = -3.0f * p->h_dt * h_inv * dt;                                         // 3xMUL
       if (fabsf(w) < 0.2f)
-        p->rho *= approx_expf(w); /* 4th order expansion of exp(w) */
+        p->rho *= approx_expf(w); /* 4th order expansion of exp(w) */           // 10xFLOP
       else
-        p->rho *= expf(w);
+        p->rho *= expf(w);                                                      // "0xFLOP"
 
       /* Predict the values of the extra fields */
-      hydro_predict_extra(p, xp, ti_old, ti_current, timeBase);
+      hydro_predict_extra(p, xp, ti_old, ti_current, timeBase);                 // 21xFLOP
 
       /* Compute (square of) motion since last cell construction */
-      const float dx2 = (p->x[0] - xp->x_old[0]) * (p->x[0] - xp->x_old[0]) +
-                        (p->x[1] - xp->x_old[1]) * (p->x[1] - xp->x_old[1]) +
-                        (p->x[2] - xp->x_old[2]) * (p->x[2] - xp->x_old[2]);
-      dx2_max = fmaxf(dx2_max, dx2);
+      const float dx2 = (p->x[0] - xp->x_old[0]) * (p->x[0] - xp->x_old[0]) +   // 2xSUB, 1xMUL, 1xADD
+                        (p->x[1] - xp->x_old[1]) * (p->x[1] - xp->x_old[1]) +   // 2xSUB, 1xMUL, 1xADD
+                        (p->x[2] - xp->x_old[2]) * (p->x[2] - xp->x_old[2]);    // 2xSUB, 1xMUL
+      dx2_max = fmaxf(dx2_max, dx2);                                            // 1xFMAX
 
       /* Maximal smoothing length */
-      h_max = fmaxf(p->h, h_max);
+      h_max = fmaxf(p->h, h_max);                                               // 1xFMAX
+                                                                                //
+                                                                                // 74 FLOPs
     }
 
     /* Now, get the maximal particle motion from its square */
-    dx_max = sqrtf(dx2_max);
+    dx_max = sqrtf(dx2_max);                                                    // 1xSQRT
+
+    flops += 74*nr_parts + 1; /* For benchmark only. */
+
+    benchmark_interval_end(r, flops);
   }
 
   /* Otherwise, aggregate data from children. */
@@ -732,8 +801,10 @@ void runner_dodrift(struct runner *r, struct cell *c, int timer) {
         struct cell *cp = c->progeny[k];
         runner_dodrift(r, cp, 0);
 
-        dx_max = fmaxf(dx_max, cp->dx_max);
-        h_max = fmaxf(h_max, cp->h_max);
+        dx_max = fmaxf(dx_max, cp->dx_max);                                     // 1xFMAX
+        h_max = fmaxf(h_max, cp->h_max);                                        // 1xFMAX
+                                                                                //
+                                                                                // 2 FLOPs (neglected)
       }
   }
 

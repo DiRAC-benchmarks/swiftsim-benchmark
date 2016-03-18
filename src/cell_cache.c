@@ -210,9 +210,9 @@ cell_cache_single(struct runner *r, struct cell *c, int sid) {
         __builtin_prefetch(&sort[i]);
       }
 
-      for (i = 0; i < c->count; ++i) {
-        for (j = 0; j < 3; ++j) {
-          view->parts_xs[j][i] = c->parts[sort[i].i].x[j];
+      for (i = 0; i < c->count; ++i) {                                          // c->count x...
+        for (j = 0; j < 3; ++j) {                                               //   3x...
+          view->parts_xs[j][i] = c->parts[sort[i].i].x[j];                      //     4B in sort[i].i, 8B in x[j], 8B out parts_xs[j][i]
         }
       }
     } else {

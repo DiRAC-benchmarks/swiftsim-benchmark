@@ -186,17 +186,19 @@ __attribute__((always_inline)) INLINE static void hydro_predict_extra(
     struct part* p, struct xpart* xp, int t0, int t1, double timeBase) {
   float u, w;
 
-  const float dt = (t1 - t0) * timeBase;
+  const float dt = (t1 - t0) * timeBase;                                        // 1xSUB, 1xMUL
 
   /* Predict internal energy */
-  w = p->force.u_dt / p->u * dt;
-  if (fabsf(w) < 0.2f)
-    u = p->u *= approx_expf(w);
+  w = p->force.u_dt / p->u * dt;                                                // 1xDIV, 1xMUL
+  if (fabsf(w) < 0.2f)                                                          // 1xFABS, 1xCMP
+    u = p->u *= approx_expf(w);                                                 // 1xMUL, 10xFLOP
   else
-    u = p->u *= expf(w);
+    u = p->u *= expf(w);                                                        // "0xFLOP"
 
   /* Predict gradient term */
-  p->force.POrho2 = u * (const_hydro_gamma - 1.0f) / (p->rho * xp->omega);
+  p->force.POrho2 = u * (const_hydro_gamma - 1.0f) / (p->rho * xp->omega);      // 1xMUL, 1xSUB, 1xDIV, 1xMUL
+                                                                                //
+                                                                                // 21 FLOPs
 }
 
 /**

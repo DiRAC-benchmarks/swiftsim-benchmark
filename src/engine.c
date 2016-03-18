@@ -2561,6 +2561,8 @@ void engine_init(struct engine *e, struct space *s, float dt, int nr_threads,
   cell_cache_init(nr_threads, 2, 2);
 #endif
 
+  benchmark_init(nr_threads);
+
   /* Wait for the runner threads to be in place. */
   while (e->barrier_running || e->barrier_launch)
     if (pthread_cond_wait(&e->barrier_cond, &e->barrier_mutex) != 0)

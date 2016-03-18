@@ -11,3 +11,18 @@ Twitter: @SwiftSimulation
 
 See INSTALL.swift for instructions.
 
+# DiRAC benchmark
+
+A number of key routines are instrumented for manually-counted FLOPs. These few
+account for a little more than 80% of the clock time in a typical simulation.
+They are:
+
+* `DOPAIR1` and `DOPAIR2` (`runner_dopair1_density` and `runner_dopair2_force`)
+* `DOSELF1` and `DOSELF2` (`runner_doself1_density` and `runner_doself2_force`)
+* `runner_iact_nonsym_vec_density` and `runner_iact_vec_density`
+  * their scalar counterparts, `runner_iact_nonsym_density` and `runner_iact_density`
+* `runner_iact_nonsym_vec_force`, `runner_iact_vec_force`
+  * their scalar counterparts, `runner_iact_nonsym_force` and `runner_iact_force`
+* `kernel_deval_vec` and `kernel_deval`
+* `runner_dodrift`
+  * `approx_expf` and `hydro_predict_extra`

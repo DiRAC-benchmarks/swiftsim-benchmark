@@ -707,6 +707,11 @@ int main(int argc, char *argv[]) {
     }
   }
 
+  long double result = benchmark_result(); // collective, even if output isn't
+  if (myrank == 0) {
+    printf("Benchmark (%s): %Lf\n", benchmark_units(), result);
+  }
+
 #ifdef WITH_MPI
   if (MPI_Finalize() != MPI_SUCCESS)
     error("call to MPI_Finalize failed with error %i.", res);

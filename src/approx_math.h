@@ -27,7 +27,9 @@
  * @param x The number to take the exponential of.
  */
 __attribute__((always_inline)) INLINE static float approx_expf(float x) {
-  return 1.f + x * (1.f + x * (0.5f + x * (1.f / 6.0f + 1.f / 24.0f * x)));
+  return 1.f + x * (1.f + x * (0.5f + x * (1.f / 6.0f + 1.f / 24.0f * x))); // 4xADD, 4xMUL, 2xDIV
+                                                                            //
+                                                                            // 10 FLOPs
 }
 
 #endif /* SWIFT_APPROX_MATH_H */

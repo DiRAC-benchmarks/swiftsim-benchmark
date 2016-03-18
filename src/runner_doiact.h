@@ -1056,16 +1056,21 @@ void DOPAIR1(struct runner *r, struct cell *ci, struct cell *cj) {
   }
 #endif
 
+  /* For benchmark only. TODO: Above cell_cache_pair? */
+  benchmark_interval_begin(r);
+  uint64_t flops = 0;
+
   /* Get some other useful values. */
-  hi_max = ci->h_max * kernel_gamma - rshift;
-  hj_max = cj->h_max * kernel_gamma;
+  hi_max = ci->h_max * kernel_gamma - rshift;                                   // 1xMUL, 1xSUB
+  hj_max = cj->h_max * kernel_gamma;                                            // 1xMUL
   count_i = ci->count;
   count_j = cj->count;
   parts_i = ci->parts;
   parts_j = cj->parts;
-  di_max = sort_i[count_i - 1].d - rshift;
+  di_max = sort_i[count_i - 1].d - rshift;                                      // 1xSUB
   dj_min = sort_j[0].d;
-  dx_max = (ci->dx_max + cj->dx_max);
+  dx_max = (ci->dx_max + cj->dx_max);                                           // 1xADD
+  flops += 5; /* For benchmark only. */
 
   /* Loop over the parts in ci. */
   int pid_min = 1 + exit_from_right(sort_i, count_i, dj_min - hi_max - dx_max);
@@ -1075,33 +1080,37 @@ void DOPAIR1(struct runner *r, struct cell *ci, struct cell *cj) {
     pi = &parts_i[sort_i[pid].i];
     if (pi->ti_end > ti_current) continue;
     hi = pi->h;
-    di = sort_i[pid].d + hi * kernel_gamma + dx_max - rshift;
-    if (di < dj_min) continue;
+    di = sort_i[pid].d + hi * kernel_gamma + dx_max - rshift;                   // 2xADD, 1xMUL, 1xSUB
+    flops += 5; /* For benchmark only. Does include following 1xCMP. */
+    if (di < dj_min) continue;                                                  // 1xCMP
 
-    hig2 = hi * hi * kernel_gamma2;
-    for (k = 0; k < 3; k++) pix[k] = pi->x[k] - shift[k];
+    hig2 = hi * hi * kernel_gamma2;                                             // 2xMUL
+    for (k = 0; k < 3; k++) pix[k] = pi->x[k] - shift[k];                       // 3xSUB
+    flops += 5; /* For benchmark only. */
 
 #if !defined(NO_CELL_CACHE) && defined(VECTORIZE)
     vector vf_pix[3];
     for (k = 0; k < 3; k++) vf_pix[k].v = vec_set1(pix[k]);
 
     vector vf_hig2;
-    vf_hig2.v = vec_set1(hig2 + 6*sqrt(3)*FLT_EPSILON*hi*(pix[0]+pix[1]+pix[2]));
+    vf_hig2.v = vec_set1(hig2+6*sqrt(3)*FLT_EPSILON*hi*(pix[0]+pix[1]+pix[2])); // 3xADD, 2xMUL
+    flops += 5; /* For benchmark only. */
 
     int pjd_max = exit_from_left(sort_j, count_j, di);
     int pjd_align = pjd_max - (pjd_max % VEC_SIZE);
     for (pjd = 0; pjd < pjd_align; pjd += VEC_SIZE) {
       vector vf_pjx[3], vf_dx[3];
       for (k = 0; k < 3; k++) vf_pjx[k].v = vec_load(&parts_j_xs[k][pjd]);
-      for (k = 0; k < 3; k++) vf_dx[k].v = vf_pix[k].v - vf_pjx[k].v;
+      for (k = 0; k < 3; k++) vf_dx[k].v = vf_pix[k].v - vf_pjx[k].v;           // 3x8xSUB
 
       vector vf_r2;
-      vf_r2.v = vf_dx[0].v * vf_dx[0].v;
-      for (k = 1; k < 3; k++) vf_r2.v += vf_dx[k].v * vf_dx[k].v;
+      vf_r2.v = vf_dx[0].v * vf_dx[0].v;                                        // 8xMUL
+      for (k = 1; k < 3; k++) vf_r2.v += vf_dx[k].v * vf_dx[k].v;               // 2x8xADD, 2x8xMUL
 
       vector vf_mask;
-      vf_mask.v = vec_cmp_lt(vf_r2.v, vf_hig2.v);
+      vf_mask.v = vec_cmp_lt(vf_r2.v, vf_hig2.v);                               // 8xCMP
       int mask = vec_cmp_result(vf_mask.v);
+      flops += 72; /* For benchmark only. */
 
       if (mask != 0) {
         int x_hi = CHAR_BIT*sizeof(int) - __builtin_clz(mask);
@@ -1110,12 +1119,13 @@ void DOPAIR1(struct runner *r, struct cell *ci, struct cell *cj) {
             pj = &parts_j[sort_j[pjd+x].i];
 
             r2 = 0.0f;
-            for (k = 0; k < 3; k++) {
-              dx[k] = pix[k] - pj->x[k];
-              r2 += dx[k] * dx[k];
+            for (k = 0; k < 3; k++) {                                           // 3x...
+              dx[k] = pix[k] - pj->x[k];                                        //   1xSUB
+              r2 += dx[k] * dx[k];                                              //   1xADD, 1xMUL
             }
 
-            if (r2 >= hig2) continue;
+            flops += 10; /* For benchmark only. Does include following 1xCMP. */
+            if (r2 >= hig2) continue;                                           // 1xCMP
 
             r2q[icount] = r2;
             dxq[VEC_SIZE * 0 + icount] = dx[0];
@@ -1128,8 +1138,9 @@ void DOPAIR1(struct runner *r, struct cell *ci, struct cell *cj) {
             icount += 1;
 
             if (icount == VEC_SIZE) {
-              IACT_NONSYM_VEC(r2q, dxq, hiq, hjq, piq, pjq);
+              IACT_NONSYM_VEC(r2q, dxq, hiq, hjq, piq, pjq);                    // 720xFLOP
               icount = 0;
+              flops += 720; /* For benchmark only. */
             }
           }
         }
@@ -1140,12 +1151,13 @@ void DOPAIR1(struct runner *r, struct cell *ci, struct cell *cj) {
       pj = &parts_j[sort_j[pjd].i];
 
       r2 = 0.0f;
-      for (k = 0; k < 3; k++) {
-        dx[k] = pix[k] - pj->x[k];
-        r2 += dx[k] * dx[k];
+      for (k = 0; k < 3; k++) {                                                 // 3x...
+        dx[k] = pix[k] - pj->x[k];                                              //   1xSUB
+        r2 += dx[k] * dx[k];                                                    //   1xADD, 1xMUL
       }
+      flops += 10; /* For benchmark only. Does include following 1xCMP. */
 
-      if (r2 < hig2) {
+      if (r2 < hig2) {                                                          // 1xCMP
         r2q[icount] = r2;
         dxq[VEC_SIZE * 0 + icount] = dx[0];
         dxq[VEC_SIZE * 1 + icount] = dx[1];
@@ -1157,8 +1169,9 @@ void DOPAIR1(struct runner *r, struct cell *ci, struct cell *cj) {
         icount += 1;
 
         if (icount == VEC_SIZE) {
-          IACT_NONSYM_VEC(r2q, dxq, hiq, hjq, piq, pjq);
+          IACT_NONSYM_VEC(r2q, dxq, hiq, hjq, piq, pjq);                        // 720xFLOP
           icount = 0;
+          flops += 720; /* For benchmark only. */
         }
       }
     }
@@ -1223,11 +1236,13 @@ void DOPAIR1(struct runner *r, struct cell *ci, struct cell *cj) {
     pj = &parts_j[sort_j[pjd].i];
     if (pj->ti_end > ti_current) continue;
     hj = pj->h;
-    dj = sort_j[pjd].d - hj * kernel_gamma - dx_max - rshift;
-    if (dj > di_max) continue;
+    dj = sort_j[pjd].d - hj * kernel_gamma - dx_max - rshift;                   // 3xSUB, 1xMUL
+    flops += 5; /* For benchmark only. Does include following 1xCMP. */
+    if (dj > di_max) continue;                                                  // 1xCMP
 
-    for (k = 0; k < 3; k++) pjx[k] = pj->x[k] + shift[k];
-    hjg2 = hj * hj * kernel_gamma2;
+    for (k = 0; k < 3; k++) pjx[k] = pj->x[k] + shift[k];                       // 3xADD
+    hjg2 = hj * hj * kernel_gamma2;                                             // 2xMUL
+    flops += 5; /* For benchmark only. */
 
 #if !defined(NO_CELL_CACHE) && defined(VECTORIZE)
     int pid_min = 1 + exit_from_right(sort_i, count_i, dj);
@@ -1245,12 +1260,13 @@ void DOPAIR1(struct runner *r, struct cell *ci, struct cell *cj) {
       pi = &parts_i[sort_i[pid].i];
 
       r2 = 0.0f;
-      for (k = 0; k < 3; k++) {
-        dx[k] = pjx[k] - pi->x[k];
-        r2 += dx[k] * dx[k];
+      for (k = 0; k < 3; k++) {                                                 // 3x...
+        dx[k] = pjx[k] - pi->x[k];                                              //   1xSUB
+        r2 += dx[k] * dx[k];                                                    //   1xADD, 1xMUL
       }
+      flops += 10; /* For benchmark only. Does include following 1xCMP. */
 
-      if (r2 < hjg2) {
+      if (r2 < hjg2) {                                                          // 1xCMP
         r2q[icount] = r2;
         dxq[VEC_SIZE * 0 + icount] = dx[0];
         dxq[VEC_SIZE * 1 + icount] = dx[1];
@@ -1262,8 +1278,9 @@ void DOPAIR1(struct runner *r, struct cell *ci, struct cell *cj) {
         icount += 1;
 
         if (icount == VEC_SIZE) {
-          IACT_NONSYM_VEC(r2q, dxq, hiq, hjq, piq, pjq);
+          IACT_NONSYM_VEC(r2q, dxq, hiq, hjq, piq, pjq);                        // 720xFLOP
           icount = 0;
+          flops += 720; /* For benchmark only. */
         }
       }
     }
@@ -1272,20 +1289,22 @@ void DOPAIR1(struct runner *r, struct cell *ci, struct cell *cj) {
     for (k = 0; k < 3; k++) vf_pjx[k].v = vec_set1(pjx[k]);
 
     vector vf_hjg2;
-    vf_hjg2.v = vec_set1(hjg2 + 6*sqrt(3)*FLT_EPSILON*hj*(pjx[0]+pjx[1]+pjx[2]));
+    vf_hjg2.v = vec_set1(hjg2+6*sqrt(3)*FLT_EPSILON*hj*(pjx[0]+pjx[1]+pjx[2])); // 3xADD, 2xMUL
+    flops += 5; /* For benchmark only. */
 
     for (pid = pid_align1; pid < pid_align2; pid += VEC_SIZE) {
       vector vf_pix[3], vf_dx[3];
       for (k = 0; k < 3; k++) vf_pix[k].v = vec_load(&parts_i_xs[k][pid]);
-      for (k = 0; k < 3; k++) vf_dx[k].v = vf_pjx[k].v - vf_pix[k].v;
+      for (k = 0; k < 3; k++) vf_dx[k].v = vf_pjx[k].v - vf_pix[k].v;           // 3x8xSUB
 
       vector vf_r2;
-      vf_r2.v = vf_dx[0].v * vf_dx[0].v;
-      for (k = 1; k < 3; k++) vf_r2.v += vf_dx[k].v * vf_dx[k].v;
+      vf_r2.v = vf_dx[0].v * vf_dx[0].v;                                        // 8xMUL
+      for (k = 1; k < 3; k++) vf_r2.v += vf_dx[k].v * vf_dx[k].v;               // 2x8xADD, 2x8xMUL
 
       vector vf_mask;
-      vf_mask.v = vec_cmp_lt(vf_r2.v, vf_hjg2.v);
+      vf_mask.v = vec_cmp_lt(vf_r2.v, vf_hjg2.v);                               // 8xCMP
       int mask = vec_cmp_result(vf_mask.v);
+      flops += 72; /* For benchmark only. */
 
       if (mask != 0) {
         int x_hi = CHAR_BIT*sizeof(int) - __builtin_clz(mask);
@@ -1294,12 +1313,13 @@ void DOPAIR1(struct runner *r, struct cell *ci, struct cell *cj) {
             pi = &parts_i[sort_i[pid+x].i];
 
             r2 = 0.0f;
-            for (k = 0; k < 3; k++) {
-              dx[k] = pjx[k] - pi->x[k];
-              r2 += dx[k] * dx[k];
+            for (k = 0; k < 3; k++) {                                           // 3x...
+              dx[k] = pjx[k] - pi->x[k];                                        //   1xSUB
+              r2 += dx[k] * dx[k];                                              //   1xADD, 1xMUL
             }
 
-            if (r2 >= hjg2) continue;
+            flops += 10; /* For benchmark only. Does include following 1xCMP. */
+            if (r2 >= hjg2) continue;                                           // 1xCMP
 
             r2q[icount] = r2;
             dxq[VEC_SIZE * 0 + icount] = dx[0];
@@ -1312,8 +1332,9 @@ void DOPAIR1(struct runner *r, struct cell *ci, struct cell *cj) {
             icount += 1;
 
             if (icount == VEC_SIZE) {
-              IACT_NONSYM_VEC(r2q, dxq, hiq, hjq, piq, pjq);
+              IACT_NONSYM_VEC(r2q, dxq, hiq, hjq, piq, pjq);                    // 720xFLOP
               icount = 0;
+              flops += 720; /* For benchmark only. */
             }
           }
         }
@@ -1324,12 +1345,13 @@ void DOPAIR1(struct runner *r, struct cell *ci, struct cell *cj) {
       pi = &parts_i[sort_i[pid].i];
 
       r2 = 0.0f;
-      for (k = 0; k < 3; k++) {
-        dx[k] = pjx[k] - pi->x[k];
-        r2 += dx[k] * dx[k];
+      for (k = 0; k < 3; k++) {                                                 // 3x...
+        dx[k] = pjx[k] - pi->x[k];                                              //   1xSUB
+        r2 += dx[k] * dx[k];                                                    //   1xADD, 1xMUL
       }
+      flops += 10; /* For benchmark only. Does include following 1xCMP. */
 
-      if (r2 < hjg2) {
+      if (r2 < hjg2) {                                                          // 1xCMP
         r2q[icount] = r2;
         dxq[VEC_SIZE * 0 + icount] = dx[0];
         dxq[VEC_SIZE * 1 + icount] = dx[1];
@@ -1341,8 +1363,9 @@ void DOPAIR1(struct runner *r, struct cell *ci, struct cell *cj) {
         icount += 1;
 
         if (icount == VEC_SIZE) {
-          IACT_NONSYM_VEC(r2q, dxq, hiq, hjq, piq, pjq);
+          IACT_NONSYM_VEC(r2q, dxq, hiq, hjq, piq, pjq);                        // 720xFLOP
           icount = 0;
+          flops += 720; /* For benchmark only. */
         }
       }
     }
@@ -1402,9 +1425,12 @@ void DOPAIR1(struct runner *r, struct cell *ci, struct cell *cj) {
       dx[0] = dxq[VEC_SIZE * 0 + k];
       dx[1] = dxq[VEC_SIZE * 1 + k];
       dx[2] = dxq[VEC_SIZE * 2 + k];
-      IACT_NONSYM(r2q[k], dx, hiq[k], hjq[k], piq[k], pjq[k]);
+      IACT_NONSYM(r2q[k], dx, hiq[k], hjq[k], piq[k], pjq[k]);                  // 58xFLOP
+      flops += 58; /* For benchmark only. */
     }
 #endif
+
+  benchmark_interval_end(r, flops);
 
   TIMER_TOC(TIMER_DOPAIR);
 }
@@ -1476,16 +1502,21 @@ void DOPAIR2(struct runner *r, struct cell *ci, struct cell *cj) {
   }
 #endif
 
+  /* For benchmark only. TODO: Above cell_cache_pair? */
+  benchmark_interval_begin(r);
+  uint64_t flops = 0;
+
   /* Get some other useful values. */
-  hi_max = ci->h_max * kernel_gamma - rshift;
-  hj_max = cj->h_max * kernel_gamma;
+  hi_max = ci->h_max * kernel_gamma - rshift;                                   // 1xMUL, 1xSUB
+  hj_max = cj->h_max * kernel_gamma;                                            // 1xMUL
   count_i = ci->count;
   count_j = cj->count;
   parts_i = ci->parts;
   parts_j = cj->parts;
-  di_max = sort_i[count_i - 1].d - rshift;
+  di_max = sort_i[count_i - 1].d - rshift;                                      // 1xSUB
   dj_min = sort_j[0].d;
-  dx_max = (ci->dx_max + cj->dx_max);
+  dx_max = (ci->dx_max + cj->dx_max);                                           // 1xADD
+  flops += 5; /* For benchmark only. */
 
   /* Collect the number of parts left and right below dt. */
   if (ci->ti_end_max <= ti_current) {
@@ -1522,11 +1553,12 @@ void DOPAIR2(struct runner *r, struct cell *ci, struct cell *cj) {
     /* Get a hold of the ith part in ci. */
     pi = &parts_i[sort_i[pid].i];
     hi = pi->h;
-    di = sort_i[pid].d + hi * kernel_gamma + dx_max - rshift;
-    if (di < dj_min) continue;
+    di = sort_i[pid].d + hi * kernel_gamma + dx_max - rshift;                   // 2xADD, 1xMUL, 1xSUB
+    if (di < dj_min) continue;                                                  // 1xCMP
 
-    hig2 = hi * hi * kernel_gamma2;
-    for (k = 0; k < 3; k++) pix[k] = pi->x[k] - shift[k];
+    hig2 = hi * hi * kernel_gamma2;                                             // 2xMUL
+    for (k = 0; k < 3; k++) pix[k] = pi->x[k] - shift[k];                       // 3xSUB
+    flops += 10; /* For benchmark only. */
 
     /* Look at valid dt parts only? */
     if (pi->ti_end > ti_current) {
@@ -1541,13 +1573,14 @@ void DOPAIR2(struct runner *r, struct cell *ci, struct cell *cj) {
 
         /* Compute the pairwise distance. */
         r2 = 0.0f;
-        for (k = 0; k < 3; k++) {
-          dx[k] = pj->x[k] - pix[k];
-          r2 += dx[k] * dx[k];
+        for (k = 0; k < 3; k++) {                                               // 3x...
+          dx[k] = pj->x[k] - pix[k];                                            //   1xSUB
+          r2 += dx[k] * dx[k];                                                  //   1xADD, 1xMUL
         }
+        flops += 10; /* For benchmark only. Does include following 1xCMP. */
 
         /* Hit or miss? */
-        if (r2 < hig2) {
+        if (r2 < hig2) {                                                        // 1xCMP
 
 #ifndef VECTORIZE
 
@@ -1568,8 +1601,9 @@ void DOPAIR2(struct runner *r, struct cell *ci, struct cell *cj) {
 
           /* Flush? */
           if (icount1 == VEC_SIZE) {
-            IACT_NONSYM_VEC(r2q1, dxq1, hiq1, hjq1, piq1, pjq1);
+            IACT_NONSYM_VEC(r2q1, dxq1, hiq1, hjq1, piq1, pjq1);                // 906xFLOP
             icount1 = 0;
+            flops += 906; /* For benchmark only. */
           }
 
 #endif
@@ -1586,23 +1620,25 @@ void DOPAIR2(struct runner *r, struct cell *ci, struct cell *cj) {
       vector vf_pix[3];
       for (k = 0; k < 3; k++) vf_pix[k].v = vec_set1(pix[k]);
 
-      vector vf_hig2;
-      vf_hig2.v = vec_set1(hig2 + 6*sqrt(3)*FLT_EPSILON*hi*(pix[0]+pix[1]+pix[2]));
+      vector vf_hig2;                                                           // 3xADD, 2xMUL
+      vf_hig2.v = vec_set1(hig2+6*sqrt(3)*FLT_EPSILON*hi*(pix[0]+pix[1]+pix[2]));
+      flops += 5; /* For benchmark only. */
 
       int pjd_max = exit_from_left(sort_j, count_j, di);
       int pjd_align = pjd_max - pjd_max % VEC_SIZE;
       for (pjd = 0; pjd < pjd_align; pjd += VEC_SIZE) {
         vector vf_pjx[3], vf_dx[3];
         for (k = 0; k < 3; k++) vf_pjx[k].v = vec_load(&parts_j_xs[k][pjd]);
-        for (k = 0; k < 3; k++) vf_dx[k].v = vf_pix[k].v - vf_pjx[k].v;
+        for (k = 0; k < 3; k++) vf_dx[k].v = vf_pix[k].v - vf_pjx[k].v;         // 3x8xSUB
 
         vector vf_r2;
-        vf_r2.v = vf_dx[0].v * vf_dx[0].v;
-        for (k = 1; k < 3; k++) vf_r2.v += vf_dx[k].v * vf_dx[k].v;
+        vf_r2.v = vf_dx[0].v * vf_dx[0].v;                                      // 8xMUL
+        for (k = 1; k < 3; k++) vf_r2.v += vf_dx[k].v * vf_dx[k].v;             // 2x8xADD, 2x8xMUL
 
         vector vf_mask;
-        vf_mask.v = vec_cmp_lt(vf_r2.v, vf_hig2.v);
+        vf_mask.v = vec_cmp_lt(vf_r2.v, vf_hig2.v);                             // 8xCMP
         int mask = vec_cmp_result(vf_mask.v);
+        flops += 72; /* For benchmark only. */
 
         if (mask != 0) {
           int x_hi = CHAR_BIT*sizeof(int) - __builtin_clz(mask);
@@ -1612,12 +1648,13 @@ void DOPAIR2(struct runner *r, struct cell *ci, struct cell *cj) {
               hj = pj->h;
 
               r2 = 0.0f;
-              for (k = 0; k < 3; k++) {
-                dx[k] = pix[k] - pj->x[k];
-                r2 += dx[k] * dx[k];
+              for (k = 0; k < 3; k++) {                                         // 3x...
+                dx[k] = pix[k] - pj->x[k];                                      //   1xSUB
+                r2 += dx[k] * dx[k];                                            //   1xADD, 1xMUL
               }
+              flops += 10; /* For benchmark only. Does include following 1xCMP. */
 
-              if (r2 >= hig2) continue;
+              if (r2 >= hig2) continue;                                         // 1xCMP
 
               if (pj->ti_end <= ti_current) {
                 r2q2[icount2] = r2;
@@ -1631,8 +1668,9 @@ void DOPAIR2(struct runner *r, struct cell *ci, struct cell *cj) {
                 icount2 += 1;
 
                 if (icount2 == VEC_SIZE) {
-                  IACT_VEC(r2q2, dxq2, hiq2, hjq2, piq2, pjq2);
+                  IACT_VEC(r2q2, dxq2, hiq2, hjq2, piq2, pjq2);                 // 978xFLOP
                   icount2 = 0;
+                  flops += 978; /* For benchmark only. */
                 }
               } else {
                 r2q1[icount1] = r2;
@@ -1646,8 +1684,9 @@ void DOPAIR2(struct runner *r, struct cell *ci, struct cell *cj) {
                 icount1 += 1;
 
                 if (icount1 == VEC_SIZE) {
-                  IACT_NONSYM_VEC(r2q1, dxq1, hiq1, hjq1, piq1, pjq1);
+                  IACT_NONSYM_VEC(r2q1, dxq1, hiq1, hjq1, piq1, pjq1);          // 906xFLOP
                   icount1 = 0;
+                  flops += 906; /* For benchmark only. */
                 }
               }
             }
@@ -1659,12 +1698,13 @@ void DOPAIR2(struct runner *r, struct cell *ci, struct cell *cj) {
         pj = &parts_j[sort_j[pjd].i];
 
         r2 = 0.0f;
-        for (k = 0; k < 3; k++) {
-          dx[k] = pix[k] - pj->x[k];
-          r2 += dx[k] * dx[k];
+        for (k = 0; k < 3; k++) {                                               // 3x...
+          dx[k] = pix[k] - pj->x[k];                                            //   1xSUB
+          r2 += dx[k] * dx[k];                                                  //   1xMUL
         }
+        flops += 10; /* For benchmark only. Does include following 1xCMP. */
 
-        if (r2 < hig2) {
+        if (r2 < hig2) {                                                        // 1xCMP
           hj = pj->h;
 
           if (pj->ti_end <= ti_current) {
@@ -1679,8 +1719,9 @@ void DOPAIR2(struct runner *r, struct cell *ci, struct cell *cj) {
             icount2 += 1;
 
             if (icount2 == VEC_SIZE) {
-              IACT_VEC(r2q2, dxq2, hiq2, hjq2, piq2, pjq2);
+              IACT_VEC(r2q2, dxq2, hiq2, hjq2, piq2, pjq2);                     // 978xFLOP
               icount2 = 0;
+              flops += 978; /* For benchmark only. */
             }
           } else {
             r2q1[icount1] = r2;
@@ -1694,8 +1735,9 @@ void DOPAIR2(struct runner *r, struct cell *ci, struct cell *cj) {
             icount1 += 1;
 
             if (icount1 == VEC_SIZE) {
-              IACT_NONSYM_VEC(r2q1, dxq1, hiq1, hjq1, piq1, pjq1);
+              IACT_NONSYM_VEC(r2q1, dxq1, hiq1, hjq1, piq1, pjq1);              // 906xFLOP
               icount1 = 0;
+              flops += 906; /* For benchmark only. */
             }
           }
         }
@@ -1789,11 +1831,12 @@ void DOPAIR2(struct runner *r, struct cell *ci, struct cell *cj) {
     /* Get a hold of the jth part in cj. */
     pj = &parts_j[sort_j[pjd].i];
     hj = pj->h;
-    dj = sort_j[pjd].d - hj * kernel_gamma - dx_max - rshift;
+    dj = sort_j[pjd].d - hj * kernel_gamma - dx_max - rshift;                   // 3xSUB, 1xMUL
     if (dj > di_max) continue;
 
-    for (k = 0; k < 3; k++) pjx[k] = pj->x[k] + shift[k];
-    hjg2 = hj * hj * kernel_gamma2;
+    for (k = 0; k < 3; k++) pjx[k] = pj->x[k] + shift[k];                       // 3xADD
+    hjg2 = hj * hj * kernel_gamma2;                                             // 2xMUL
+    flops += 9; /* For benchmark only. */
 
     /* Is this particle outside the dt? */
     if (pj->ti_end > ti_current) {
@@ -1808,13 +1851,14 @@ void DOPAIR2(struct runner *r, struct cell *ci, struct cell *cj) {
 
         /* Compute the pairwise distance. */
         r2 = 0.0f;
-        for (k = 0; k < 3; k++) {
-          dx[k] = pi->x[k] - pjx[k];
-          r2 += dx[k] * dx[k];
+        for (k = 0; k < 3; k++) {                                               // 3x...
+          dx[k] = pi->x[k] - pjx[k];                                            //   1xSUB
+          r2 += dx[k] * dx[k];                                                  //   1xADD, 1xMUL
         }
+        flops += 13; /* For benchmark only. Does include following 2xCMP, 2xMUL. */
 
         /* Hit or miss? */
-        if (r2 < hjg2 && r2 > hi * hi * kernel_gamma2) {
+        if (r2 < hjg2 && r2 > hi * hi * kernel_gamma2) {                        // 2xCMP, 2xMUL
 
 #ifndef VECTORIZE
 
@@ -1835,8 +1879,9 @@ void DOPAIR2(struct runner *r, struct cell *ci, struct cell *cj) {
 
           /* Flush? */
           if (icount1 == VEC_SIZE) {
-            IACT_NONSYM_VEC(r2q1, dxq1, hiq1, hjq1, piq1, pjq1);
+            IACT_NONSYM_VEC(r2q1, dxq1, hiq1, hjq1, piq1, pjq1);                // 906xFLOP
             icount1 = 0;
+            flops += 906; /* For benchmark only. */
           }
 
 #endif
@@ -1864,15 +1909,17 @@ void DOPAIR2(struct runner *r, struct cell *ci, struct cell *cj) {
         pi = &parts_i[sort_i[pid].i];
 
         r2 = 0.0f;
-        for (k = 0; k < 3; k++) {
-          dx[k] = pjx[k] - pi->x[k];
-          r2 += dx[k] * dx[k];
+        for (k = 0; k < 3; k++) {                                               // 3x...
+          dx[k] = pjx[k] - pi->x[k];                                            //   1xSUB
+          r2 += dx[k] * dx[k];                                                  //   1xMUL
         }
+        flops += 10; /* For benchmark only. Does include following 1xCMP. */
 
-        if (r2 < hjg2) {
+        if (r2 < hjg2) {                                                        // 1xCMP
           hi = pi->h;
 
-          if (r2 > hi * hi * kernel_gamma2) {
+          flops += 3; /* For benchmark only. Does include following 1xCMP, 2xMUL. */
+          if (r2 > hi * hi * kernel_gamma2) {                                   // 1xCMP, 2xMUL
             if (pi->ti_end <= ti_current) {
               r2q2[icount2] = r2;
               dxq2[VEC_SIZE * 0 + icount2] = dx[0];
@@ -1885,8 +1932,9 @@ void DOPAIR2(struct runner *r, struct cell *ci, struct cell *cj) {
               icount2 += 1;
 
               if (icount2 == VEC_SIZE) {
-                IACT_VEC(r2q2, dxq2, hiq2, hjq2, piq2, pjq2);
+                IACT_VEC(r2q2, dxq2, hiq2, hjq2, piq2, pjq2);                   // 978xFLOP
                 icount2 = 0;
+                flops += 978; /* For benchmark only. */
               }
             } else {
               r2q1[icount1] = r2;
@@ -1900,8 +1948,9 @@ void DOPAIR2(struct runner *r, struct cell *ci, struct cell *cj) {
               icount1 += 1;
 
               if (icount1 == VEC_SIZE) {
-                IACT_NONSYM_VEC(r2q1, dxq1, hiq1, hjq1, piq1, pjq1);
+                IACT_NONSYM_VEC(r2q1, dxq1, hiq1, hjq1, piq1, pjq1);            // 906xFLOP
                 icount1 = 0;
+                flops += 906; /* For benchmark only. */
               }
             }
           }
@@ -1911,21 +1960,23 @@ void DOPAIR2(struct runner *r, struct cell *ci, struct cell *cj) {
       vector vf_pjx[3];
       for (k = 0; k < 3; k++) vf_pjx[k].v = vec_set1(pjx[k]);
 
-      vector vf_hjg2;
-      vf_hjg2.v = vec_set1(hjg2 + 6*sqrt(3)*FLT_EPSILON*hj*(pjx[0]+pjx[1]+pjx[2]));
+      vector vf_hjg2;                                                           // 3xADD, 2xMUL
+      vf_hjg2.v = vec_set1(hjg2+6*sqrt(3)*FLT_EPSILON*hj*(pjx[0]+pjx[1]+pjx[2]));
+      flops += 5; /* For benchmark only. */
 
       for (pid = pid_align1; pid < pid_align2; pid += VEC_SIZE) {
         vector vf_pix[3], vf_dx[3];
         for (k = 0; k < 3; k++) vf_pix[k].v = vec_load(&parts_i_xs[k][pid]);
-        for (k = 0; k < 3; k++) vf_dx[k].v = vf_pjx[k].v - vf_pix[k].v;
+        for (k = 0; k < 3; k++) vf_dx[k].v = vf_pjx[k].v - vf_pix[k].v;         // 3x8xSUB
 
         vector vf_r2;
-        vf_r2.v = vf_dx[0].v * vf_dx[0].v;
-        for (k = 1; k < 3; k++) vf_r2.v += vf_dx[k].v * vf_dx[k].v;
+        vf_r2.v = vf_dx[0].v * vf_dx[0].v;                                      // 8xMUL
+        for (k = 1; k < 3; k++) vf_r2.v += vf_dx[k].v * vf_dx[k].v;             // 2x8xADD, 2x8xMUL
 
         vector vf_mask;
-        vf_mask.v = vec_cmp_lt(vf_r2.v, vf_hjg2.v);
+        vf_mask.v = vec_cmp_lt(vf_r2.v, vf_hjg2.v);                             // 8xCMP
         int mask = vec_cmp_result(vf_mask.v);
+        flops += 72; /* For benchmark only. */
 
         if (mask != 0) {
           int x_hi = CHAR_BIT*sizeof(int) - __builtin_clz(mask);
@@ -1935,14 +1986,16 @@ void DOPAIR2(struct runner *r, struct cell *ci, struct cell *cj) {
               hi = pi->h;
 
               r2 = 0.0f;
-              for (k = 0; k < 3; k++) {
-                dx[k] = pjx[k] - pi->x[k];
-                r2 += dx[k] * dx[k];
+              for (k = 0; k < 3; k++) {                                         // 3x...
+                dx[k] = pjx[k] - pi->x[k];                                      //   1xSUB
+                r2 += dx[k] * dx[k];                                            //   1xADD, 1xMUL
               }
+              flops += 10; /* For benchmark only. Does include following 1xCMP. */
 
-              if (r2 >= hjg2) continue;
+              if (r2 >= hjg2) continue;                                         // 1xCMP
 
-              if (r2 > hi * hi * kernel_gamma2) {
+              flops += 3; /* For benchmark only. Does include following 1xCMP, 2xMUL. */
+              if (r2 > hi * hi * kernel_gamma2) {                               // 1xCMP, 2xMUL
                 if (pi->ti_end <= ti_current) {
                   r2q2[icount2] = r2;
                   dxq2[VEC_SIZE * 0 + icount2] = dx[0];
@@ -1955,8 +2008,9 @@ void DOPAIR2(struct runner *r, struct cell *ci, struct cell *cj) {
                   icount2 += 1;
 
                   if (icount2 == VEC_SIZE) {
-                    IACT_VEC(r2q2, dxq2, hiq2, hjq2, piq2, pjq2);
+                    IACT_VEC(r2q2, dxq2, hiq2, hjq2, piq2, pjq2);               // 978xFLOP
                     icount2 = 0;
+                    flops += 978; /* For benchmark only. */
                   }
                 } else {
                   r2q1[icount1] = r2;
@@ -1970,8 +2024,9 @@ void DOPAIR2(struct runner *r, struct cell *ci, struct cell *cj) {
                   icount1 += 1;
 
                   if (icount1 == VEC_SIZE) {
-                    IACT_NONSYM_VEC(r2q1, dxq1, hiq1, hjq1, piq1, pjq1);
+                    IACT_NONSYM_VEC(r2q1, dxq1, hiq1, hjq1, piq1, pjq1);        // 906xFLOP
                     icount1 = 0;
+                    flops += 906; /* For benchmark only. */
                   }
                 }
               }
@@ -1984,15 +2039,17 @@ void DOPAIR2(struct runner *r, struct cell *ci, struct cell *cj) {
         pi = &parts_i[sort_i[pid].i];
 
         r2 = 0.0f;
-        for (k = 0; k < 3; k++) {
-          dx[k] = pjx[k] - pi->x[k];
-          r2 += dx[k] * dx[k];
+        for (k = 0; k < 3; k++) {                                               // 3x...
+          dx[k] = pjx[k] - pi->x[k];                                            //   1xSUB
+          r2 += dx[k] * dx[k];                                                  //   1xADD, 1xMUL
         }
+        flops += 10; /* For benchmark only. Does include following 1xCMP. */
 
-        if (r2 < hjg2) {
+        if (r2 < hjg2) {                                                        // 1xCMP
           hi = pi->h;
 
-          if (r2 > hi * hi * kernel_gamma2) {
+          flops += 3; /* For benchmark only. Does include following 1xCMP, 2xMUL. */
+          if (r2 > hi * hi * kernel_gamma2) {                                   // 1xCMP, 2xMUL
             if (pi->ti_end <= ti_current) {
               r2q2[icount2] = r2;
               dxq2[VEC_SIZE * 0 + icount2] = dx[0];
@@ -2005,8 +2062,9 @@ void DOPAIR2(struct runner *r, struct cell *ci, struct cell *cj) {
               icount2 += 1;
 
               if (icount2 == VEC_SIZE) {
-                IACT_VEC(r2q2, dxq2, hiq2, hjq2, piq2, pjq2);
+                IACT_VEC(r2q2, dxq2, hiq2, hjq2, piq2, pjq2);                   // 978xFLOP
                 icount2 = 0;
+                flops += 978; /* For benchmark only. */
               }
             } else {
               r2q1[icount1] = r2;
@@ -2020,8 +2078,9 @@ void DOPAIR2(struct runner *r, struct cell *ci, struct cell *cj) {
               icount1 += 1;
 
               if (icount1 == VEC_SIZE) {
-                IACT_NONSYM_VEC(r2q1, dxq1, hiq1, hjq1, piq1, pjq1);
+                IACT_NONSYM_VEC(r2q1, dxq1, hiq1, hjq1, piq1, pjq1);            // 906xFLOP
                 icount1 = 0;
+                flops += 906; /* For benchmark only. */
               }
             }
           }
@@ -2112,7 +2171,8 @@ void DOPAIR2(struct runner *r, struct cell *ci, struct cell *cj) {
       dx[0] = dxq1[VEC_SIZE * 0 + k];
       dx[1] = dxq1[VEC_SIZE * 1 + k];
       dx[2] = dxq1[VEC_SIZE * 2 + k];
-      IACT_NONSYM(r2q1[k], dx, hiq1[k], hjq1[k], piq1[k], pjq1[k]);
+      IACT_NONSYM(r2q1[k], dx, hiq1[k], hjq1[k], piq1[k], pjq1[k]);             // 103xFLOP
+      flops += 103; /* For benchmark only. */
     }
   }
   if (icount2 > 0) {
@@ -2120,10 +2180,13 @@ void DOPAIR2(struct runner *r, struct cell *ci, struct cell *cj) {
       dx[0] = dxq2[VEC_SIZE * 0 + k];
       dx[1] = dxq2[VEC_SIZE * 1 + k];
       dx[2] = dxq2[VEC_SIZE * 2 + k];
-      IACT(r2q2[k], dx, hiq2[k], hjq2[k], piq2[k], pjq2[k]);
+      IACT(r2q2[k], dx, hiq2[k], hjq2[k], piq2[k], pjq2[k]);                    // 135xFLOP
+      flops += 135; /* For benchmark only. */
     }
   }
 #endif
+
+  benchmark_interval_end(r, flops);
 
   TIMER_TOC(TIMER_DOPAIR);
 }
@@ -2172,6 +2235,10 @@ void DOSELF1(struct runner *r, struct cell *restrict c) {
       }
   }
 
+  /* For benchmark only. */
+  benchmark_interval_begin(r);
+  uint64_t flops = 0;
+
   /* Loop over the particles in the cell. */
   for (pid = 0; pid < count; pid++) {
 
@@ -2181,7 +2248,8 @@ void DOSELF1(struct runner *r, struct cell *restrict c) {
     /* Get the particle position and radius. */
     for (k = 0; k < 3; k++) pix[k] = pi->x[k];
     hi = pi->h;
-    hig2 = hi * hi * kernel_gamma2;
+    hig2 = hi * hi * kernel_gamma2;                                             // 2xMUL
+    flops += 2; /* For benchmark only. */
 
     /* Is the ith particle inactive? */
     if (pi->ti_end > ti_current) {
@@ -2195,13 +2263,14 @@ void DOSELF1(struct runner *r, struct cell *restrict c) {
 
         /* Compute the pairwise distance. */
         r2 = 0.0f;
-        for (k = 0; k < 3; k++) {
-          dx[k] = pj->x[k] - pix[k];
-          r2 += dx[k] * dx[k];
+        for (k = 0; k < 3; k++) {                                               // 3x
+          dx[k] = pj->x[k] - pix[k];                                            //   1xSUB
+          r2 += dx[k] * dx[k];                                                  //   1xADD, 1xMUL
         }
+        flops += 12; /* For benchmark only. Does include following 1xCMP, 2xMUL. */
 
         /* Hit or miss? */
-        if (r2 < hj * hj * kernel_gamma2) {
+        if (r2 < hj * hj * kernel_gamma2) {                                     // 1xCMP, 2xMUL
 
 #ifndef VECTORIZE
 
@@ -2222,8 +2291,9 @@ void DOSELF1(struct runner *r, struct cell *restrict c) {
 
           /* Flush? */
           if (icount1 == VEC_SIZE) {
-            IACT_NONSYM_VEC(r2q1, dxq1, hiq1, hjq1, piq1, pjq1);
+            IACT_NONSYM_VEC(r2q1, dxq1, hiq1, hjq1, piq1, pjq1);                // 720xFLOP
             icount1 = 0;
+            flops += 720; /* For benchmark only. */
           }
 
 #endif
@@ -2248,14 +2318,15 @@ void DOSELF1(struct runner *r, struct cell *restrict c) {
 
         /* Compute the pairwise distance. */
         r2 = 0.0f;
-        for (k = 0; k < 3; k++) {
-          dx[k] = pix[k] - pj->x[k];
-          r2 += dx[k] * dx[k];
+        for (k = 0; k < 3; k++) {                                               // 3x
+          dx[k] = pix[k] - pj->x[k];                                            //   1xSUB
+          r2 += dx[k] * dx[k];                                                  //   1xADD, 1xMUL
         }
-        doj = (pj->ti_end <= ti_current) && (r2 < hj * hj * kernel_gamma2);
+        doj = (pj->ti_end <= ti_current) && (r2 < hj * hj * kernel_gamma2);     // 1xCMP, 2xMUL
+        flops += 13; /* For benchmark only. Does include following 1xCMP. */
 
         /* Hit or miss? */
-        if (r2 < hig2 || doj) {
+        if (r2 < hig2 || doj) {                                                 // 1xCMP
 
 #ifndef VECTORIZE
 
@@ -2274,7 +2345,7 @@ void DOSELF1(struct runner *r, struct cell *restrict c) {
 #else
 
           /* Does pj need to be updated too? */
-          if (r2 < hig2 && doj) {
+          if (r2 < hig2 && doj) {                                               // "0xCMP"
 
             /* Add this interaction to the symmetric queue. */
             r2q2[icount2] = r2;
@@ -2289,8 +2360,9 @@ void DOSELF1(struct runner *r, struct cell *restrict c) {
 
             /* Flush? */
             if (icount2 == VEC_SIZE) {
-              IACT_VEC(r2q2, dxq2, hiq2, hjq2, piq2, pjq2);
+              IACT_VEC(r2q2, dxq2, hiq2, hjq2, piq2, pjq2);                     // 776xFLOP
               icount2 = 0;
+              flops += 776; /* For benchmark only. */
             }
 
           } else if (!doj) {
@@ -2308,27 +2380,30 @@ void DOSELF1(struct runner *r, struct cell *restrict c) {
 
             /* Flush? */
             if (icount1 == VEC_SIZE) {
-              IACT_NONSYM_VEC(r2q1, dxq1, hiq1, hjq1, piq1, pjq1);
+              IACT_NONSYM_VEC(r2q1, dxq1, hiq1, hjq1, piq1, pjq1);              // 720xFLOP
               icount1 = 0;
+              flops += 720; /* For benchmark only. */
             }
 
           } else {
 
             /* Add this interaction to the non-symmetric queue. */
             r2q1[icount1] = r2;
-            dxq1[VEC_SIZE * 0 + icount1] = -dx[0];
-            dxq1[VEC_SIZE * 1 + icount1] = -dx[1];
-            dxq1[VEC_SIZE * 2 + icount1] = -dx[2];
+            dxq1[VEC_SIZE * 0 + icount1] = -dx[0];                              // 1xNEG
+            dxq1[VEC_SIZE * 1 + icount1] = -dx[1];                              // 1xNEG
+            dxq1[VEC_SIZE * 2 + icount1] = -dx[2];                              // 1xNEG
             hiq1[icount1] = hj;
             hjq1[icount1] = hi;
             piq1[icount1] = pj;
             pjq1[icount1] = pi;
             icount1 += 1;
+            flops += 3; /* For benchmark only. */
 
             /* Flush? */
             if (icount1 == VEC_SIZE) {
-              IACT_NONSYM_VEC(r2q1, dxq1, hiq1, hjq1, piq1, pjq1);
+              IACT_NONSYM_VEC(r2q1, dxq1, hiq1, hjq1, piq1, pjq1);              // 720xFLOP
               icount1 = 0;
+              flops += 720; /* For benchmark only. */
             }
           }
 
@@ -2347,7 +2422,8 @@ void DOSELF1(struct runner *r, struct cell *restrict c) {
       dx[0] = dxq1[VEC_SIZE * 0 + k];
       dx[1] = dxq1[VEC_SIZE * 1 + k];
       dx[2] = dxq1[VEC_SIZE * 2 + k];
-      IACT_NONSYM(r2q1[k], dx, hiq1[k], hjq1[k], piq1[k], pjq1[k]);
+      IACT_NONSYM(r2q1[k], dx, hiq1[k], hjq1[k], piq1[k], pjq1[k]);             // 58xFLOP
+      flops += 58; /* For benchmark only. */
     }
   }
   if (icount2 > 0) {
@@ -2355,10 +2431,13 @@ void DOSELF1(struct runner *r, struct cell *restrict c) {
       dx[0] = dxq2[VEC_SIZE * 0 + k];
       dx[1] = dxq2[VEC_SIZE * 1 + k];
       dx[2] = dxq2[VEC_SIZE * 2 + k];
-      IACT(r2q2[k], dx, hiq2[k], hjq2[k], piq2[k], pjq2[k]);
+      IACT(r2q2[k], dx, hiq2[k], hjq2[k], piq2[k], pjq2[k]);                    // 87xFLOP
+      flops += 87; /* For benchmark only. */
     }
   }
 #endif
+
+  benchmark_interval_end(r, flops);
 
   TIMER_TOC(TIMER_DOSELF);
 }
@@ -2400,6 +2479,10 @@ void DOSELF2(struct runner *r, struct cell *restrict c) {
       }
   }
 
+  /* For benchmark only. */
+  benchmark_interval_begin(r);
+  uint64_t flops = 0;
+
   /* Loop over the particles in the cell. */
   for (pid = 0; pid < count; pid++) {
 
@@ -2409,7 +2492,8 @@ void DOSELF2(struct runner *r, struct cell *restrict c) {
     /* Get the particle position and radius. */
     for (k = 0; k < 3; k++) pix[k] = pi->x[k];
     hi = pi->h;
-    hig2 = hi * hi * kernel_gamma2;
+    hig2 = hi * hi * kernel_gamma2;                                             // 2xMUL
+    flops += 2; /* For benchmark only. */
 
     /* Is the ith particle not active? */
     if (pi->ti_end > ti_current) {
@@ -2423,13 +2507,14 @@ void DOSELF2(struct runner *r, struct cell *restrict c) {
 
         /* Compute the pairwise distance. */
         r2 = 0.0f;
-        for (k = 0; k < 3; k++) {
-          dx[k] = pj->x[k] - pix[k];
-          r2 += dx[k] * dx[k];
+        for (k = 0; k < 3; k++) {                                               // 3x..
+          dx[k] = pj->x[k] - pix[k];                                            //   1xSUB
+          r2 += dx[k] * dx[k];                                                  //   1xADD, 1xMUL
         }
+        flops += 13; /* For benchmark only. Does include following 2xCMP, 2xMUL. */
 
         /* Hit or miss? */
-        if (r2 < hig2 || r2 < hj * hj * kernel_gamma2) {
+        if (r2 < hig2 || r2 < hj * hj * kernel_gamma2) {                        // 2xCMP, 2xMUL
 
 #ifndef VECTORIZE
 
@@ -2450,8 +2535,9 @@ void DOSELF2(struct runner *r, struct cell *restrict c) {
 
           /* Flush? */
           if (icount1 == VEC_SIZE) {
-            IACT_NONSYM_VEC(r2q1, dxq1, hiq1, hjq1, piq1, pjq1);
+            IACT_NONSYM_VEC(r2q1, dxq1, hiq1, hjq1, piq1, pjq1);                // 906xFLOP
             icount1 = 0;
+            flops += 906; /* For benchmark only. */
           }
 
 #endif
@@ -2476,13 +2562,14 @@ void DOSELF2(struct runner *r, struct cell *restrict c) {
 
         /* Compute the pairwise distance. */
         r2 = 0.0f;
-        for (k = 0; k < 3; k++) {
-          dx[k] = pix[k] - pj->x[k];
-          r2 += dx[k] * dx[k];
+        for (k = 0; k < 3; k++) {                                               // 3x...
+          dx[k] = pix[k] - pj->x[k];                                            //   1xSUB
+          r2 += dx[k] * dx[k];                                                  //   1xADD, 1xMUL
         }
+        flops += 13; /* For benchmark only. Does include following 2xCMP, 2xMUL. */
 
         /* Hit or miss? */
-        if (r2 < hig2 || r2 < hj * hj * kernel_gamma2) {
+        if (r2 < hig2 || r2 < hj * hj * kernel_gamma2) {                        // 2xCMP, 2xMUL
 
 #ifndef VECTORIZE
 
@@ -2510,8 +2597,9 @@ void DOSELF2(struct runner *r, struct cell *restrict c) {
 
             /* Flush? */
             if (icount2 == VEC_SIZE) {
-              IACT_VEC(r2q2, dxq2, hiq2, hjq2, piq2, pjq2);
+              IACT_VEC(r2q2, dxq2, hiq2, hjq2, piq2, pjq2);                     // 978xFLOP
               icount2 = 0;
+              flops += 978; /* For benchmark only. */
             }
 
           } else {
@@ -2529,8 +2617,9 @@ void DOSELF2(struct runner *r, struct cell *restrict c) {
 
             /* Flush? */
             if (icount1 == VEC_SIZE) {
-              IACT_NONSYM_VEC(r2q1, dxq1, hiq1, hjq1, piq1, pjq1);
+              IACT_NONSYM_VEC(r2q1, dxq1, hiq1, hjq1, piq1, pjq1);              // 906xFLOP
               icount1 = 0;
+              flops += 906; /* For benchmark only. */
             }
           }
 
@@ -2549,7 +2638,8 @@ void DOSELF2(struct runner *r, struct cell *restrict c) {
       dx[0] = dxq1[VEC_SIZE * 0 + k];
       dx[1] = dxq1[VEC_SIZE * 1 + k];
       dx[2] = dxq1[VEC_SIZE * 2 + k];
-      IACT_NONSYM(r2q1[k], dx, hiq1[k], hjq1[k], piq1[k], pjq1[k]);
+      IACT_NONSYM(r2q1[k], dx, hiq1[k], hjq1[k], piq1[k], pjq1[k]);             // 103xFLOP
+      flops += 103; /* For benchmark only. */
     }
   }
   if (icount2 > 0) {
@@ -2557,10 +2647,13 @@ void DOSELF2(struct runner *r, struct cell *restrict c) {
       dx[0] = dxq2[VEC_SIZE * 0 + k];
       dx[1] = dxq2[VEC_SIZE * 1 + k];
       dx[2] = dxq2[VEC_SIZE * 2 + k];
-      IACT(r2q2[k], dx, hiq2[k], hjq2[k], piq2[k], pjq2[k]);
+      IACT(r2q2[k], dx, hiq2[k], hjq2[k], piq2[k], pjq2[k]);                    // 135xFLOP
+      flops += 135; /* For benchmark only. */
     }
   }
 #endif
+
+  benchmark_interval_end(r, flops);
 
   TIMER_TOC(TIMER_DOSELF);
 }

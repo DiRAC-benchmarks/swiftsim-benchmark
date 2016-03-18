@@ -23,6 +23,9 @@
 #include "cell.h"
 #include "inline.h"
 
+/* For benchmark only. */
+#include <stdint.h>
+
 extern const float runner_shift[13 * 3];
 extern const char runner_flip[27];
 
@@ -54,5 +57,11 @@ void runner_dokick(struct runner *r, struct cell *c, int timer);
 void runner_dodrift(struct runner *r, struct cell *c, int timer);
 void runner_doinit(struct runner *r, struct cell *c, int timer);
 void *runner_main(void *data);
+
+void benchmark_init(int nr_threads);
+long double benchmark_result(void);
+const char* benchmark_units(void);
+void benchmark_interval_begin(struct runner* r);
+void benchmark_interval_end(struct runner* r, uint64_t flops);
 
 #endif /* SWIFT_RUNNER_H */

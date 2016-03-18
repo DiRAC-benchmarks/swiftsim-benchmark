@@ -245,16 +245,18 @@ static float kernel_coeffs[(kernel_degree + 1) * (kernel_ivals + 1)]
 __attribute__((always_inline)) INLINE static void kernel_deval(float x,
                                                                float *W,
                                                                float *dW_dx) {
-  int ind = fminf(x, kernel_ivals);
+  int ind = fminf(x, kernel_ivals);                                             // 1xFMIN
   float *coeffs = &kernel_coeffs[ind * (kernel_degree + 1)];
-  float w = coeffs[0] * x + coeffs[1];
+  float w = coeffs[0] * x + coeffs[1];                                          // 1xMUL, 1xADD
   float dw_dx = coeffs[0];
-  for (int k = 2; k <= kernel_degree; k++) {
-    dw_dx = dw_dx * x + w;
-    w = x * w + coeffs[k];
+  for (int k = 2; k <= kernel_degree; k++) {                                    // (3 - 1)x...
+    dw_dx = dw_dx * x + w;                                                      //   1xMUL, 1xADD
+    w = x * w + coeffs[k];                                                      //   1xMUL, 1xADD
   }
   *W = w;
   *dW_dx = dw_dx;
+                                                                                // 
+                                                                                // 11 FLOPs
 }
 
 #ifdef VECTORIZE
@@ -271,7 +273,7 @@ __attribute__((always_inline))
   int j, k;
 
   /* Load x and get the interval id. */
-  ind.m = vec_ftoi(vec_fmin(x->v, vec_set1((float)kernel_ivals)));
+  ind.m = vec_ftoi(vec_fmin(x->v, vec_set1((float)kernel_ivals)));              // 8xFMIN
 
   /* load the coefficients. */
   for (k = 0; k < VEC_SIZE; k++)
@@ -279,14 +281,16 @@ __attribute__((always_inline))
       c[j].f[k] = kernel_coeffs[ind.i[k] * (kernel_degree + 1) + j];
 
   /* Init the iteration for Horner's scheme. */
-  w->v = (c[0].v * x->v) + c[1].v;
+  w->v = (c[0].v * x->v) + c[1].v;                                              // 8xMUL, 8xADD
   dw_dx->v = c[0].v;
 
   /* And we're off! */
-  for (int k = 2; k <= kernel_degree; k++) {
-    dw_dx->v = (dw_dx->v * x->v) + w->v;
-    w->v = (x->v * w->v) + c[k].v;
+  for (int k = 2; k <= kernel_degree; k++) {                                    // (3 - 1)x...
+    dw_dx->v = (dw_dx->v * x->v) + w->v;                                        //   8xMUL, 8xADD
+    w->v = (x->v * w->v) + c[k].v;                                              //   8xMUL, 8xADD
   }
+                                                                                //
+                                                                                // 88 FLOPs
 }
 
 #endif
