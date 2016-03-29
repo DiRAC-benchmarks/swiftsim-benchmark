@@ -1855,36 +1855,39 @@ void DOPAIR2(struct runner *r, struct cell *ci, struct cell *cj) {
           dx[k] = pi->x[k] - pjx[k];                                            //   1xSUB
           r2 += dx[k] * dx[k];                                                  //   1xADD, 1xMUL
         }
-        flops += 13; /* For benchmark only. Does include following 2xCMP, 2xMUL. */
+        flops += 10; /* For benchmark only. Does include following 1xCMP. */
 
         /* Hit or miss? */
-        if (r2 < hjg2 && r2 > hi * hi * kernel_gamma2) {                        // 2xCMP, 2xMUL
+        if (r2 < hjg2) {                                                        // 1xCMP
+          if (r2 > hi * hi * kernel_gamma2) {                                   // 1xCMP, 2xMUL
+            flops += 3; /* For benchmark only. */
 
 #ifndef VECTORIZE
 
-          IACT_NONSYM(r2, dx, hi, hj, pi, pj);
+            IACT_NONSYM(r2, dx, hi, hj, pi, pj);
 
 #else
 
-          /* Add this interaction to the queue. */
-          r2q1[icount1] = r2;
-          dxq1[VEC_SIZE * 0 + icount1] = dx[0];
-          dxq1[VEC_SIZE * 1 + icount1] = dx[1];
-          dxq1[VEC_SIZE * 2 + icount1] = dx[2];
-          hiq1[icount1] = hi;
-          hjq1[icount1] = hj;
-          piq1[icount1] = pi;
-          pjq1[icount1] = pj;
-          icount1 += 1;
+            /* Add this interaction to the queue. */
+            r2q1[icount1] = r2;
+            dxq1[VEC_SIZE * 0 + icount1] = dx[0];
+            dxq1[VEC_SIZE * 1 + icount1] = dx[1];
+            dxq1[VEC_SIZE * 2 + icount1] = dx[2];
+            hiq1[icount1] = hi;
+            hjq1[icount1] = hj;
+            piq1[icount1] = pi;
+            pjq1[icount1] = pj;
+            icount1 += 1;
 
-          /* Flush? */
-          if (icount1 == VEC_SIZE) {
-            IACT_NONSYM_VEC(r2q1, dxq1, hiq1, hjq1, piq1, pjq1);                // 906xFLOP
-            icount1 = 0;
-            flops += 113*VEC_SIZE + 2; /* For benchmark only. */
-          }
+            /* Flush? */
+            if (icount1 == VEC_SIZE) {
+              IACT_NONSYM_VEC(r2q1, dxq1, hiq1, hjq1, piq1, pjq1);                // 906xFLOP
+              icount1 = 0;
+              flops += 113*VEC_SIZE + 2; /* For benchmark only. */
+            }
 
 #endif
+          }
         }
 
       } /* loop over the parts in cj. */
@@ -2511,10 +2514,13 @@ void DOSELF2(struct runner *r, struct cell *restrict c) {
           dx[k] = pj->x[k] - pix[k];                                            //   1xSUB
           r2 += dx[k] * dx[k];                                                  //   1xADD, 1xMUL
         }
-        flops += 13; /* For benchmark only. Does include following 2xCMP, 2xMUL. */
+        flops += 10; /* For benchmark only. Does include following 1xCMP. */
 
         /* Hit or miss? */
         if (r2 < hig2 || r2 < hj * hj * kernel_gamma2) {                        // 2xCMP, 2xMUL
+          if (!(r2 < hig2)) {
+            flops += 3; /* For benchmark only. Does include preceding 1xCMP, 2xMUL. */
+          }
 
 #ifndef VECTORIZE
 
@@ -2566,10 +2572,13 @@ void DOSELF2(struct runner *r, struct cell *restrict c) {
           dx[k] = pix[k] - pj->x[k];                                            //   1xSUB
           r2 += dx[k] * dx[k];                                                  //   1xADD, 1xMUL
         }
-        flops += 13; /* For benchmark only. Does include following 2xCMP, 2xMUL. */
+        flops += 10; /* For benchmark only. Does include following 1xCMP. */
 
         /* Hit or miss? */
         if (r2 < hig2 || r2 < hj * hj * kernel_gamma2) {                        // 2xCMP, 2xMUL
+          if (!(r2 < hig2)) {
+            flops += 3; /* For benchmark only. Does include preceding 1xCMP, 2xMUL. */
+          }
 
 #ifndef VECTORIZE
 
