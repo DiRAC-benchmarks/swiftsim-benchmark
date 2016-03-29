@@ -1110,7 +1110,7 @@ void DOPAIR1(struct runner *r, struct cell *ci, struct cell *cj) {
       vector vf_mask;
       vf_mask.v = vec_cmp_lt(vf_r2.v, vf_hig2.v);                               // 8xCMP
       int mask = vec_cmp_result(vf_mask.v);
-      flops += 72; /* For benchmark only. */
+      flops += 9*VEC_SIZE; /* For benchmark only. */
 
       if (mask != 0) {
         int x_hi = CHAR_BIT*sizeof(int) - __builtin_clz(mask);
@@ -1140,7 +1140,7 @@ void DOPAIR1(struct runner *r, struct cell *ci, struct cell *cj) {
             if (icount == VEC_SIZE) {
               IACT_NONSYM_VEC(r2q, dxq, hiq, hjq, piq, pjq);                    // 720xFLOP
               icount = 0;
-              flops += 720; /* For benchmark only. */
+              flops += 90*VEC_SIZE; /* For benchmark only. */
             }
           }
         }
@@ -1171,7 +1171,7 @@ void DOPAIR1(struct runner *r, struct cell *ci, struct cell *cj) {
         if (icount == VEC_SIZE) {
           IACT_NONSYM_VEC(r2q, dxq, hiq, hjq, piq, pjq);                        // 720xFLOP
           icount = 0;
-          flops += 720; /* For benchmark only. */
+          flops += 90*VEC_SIZE; /* For benchmark only. */
         }
       }
     }
@@ -1280,7 +1280,7 @@ void DOPAIR1(struct runner *r, struct cell *ci, struct cell *cj) {
         if (icount == VEC_SIZE) {
           IACT_NONSYM_VEC(r2q, dxq, hiq, hjq, piq, pjq);                        // 720xFLOP
           icount = 0;
-          flops += 720; /* For benchmark only. */
+          flops += 90*VEC_SIZE; /* For benchmark only. */
         }
       }
     }
@@ -1304,7 +1304,7 @@ void DOPAIR1(struct runner *r, struct cell *ci, struct cell *cj) {
       vector vf_mask;
       vf_mask.v = vec_cmp_lt(vf_r2.v, vf_hjg2.v);                               // 8xCMP
       int mask = vec_cmp_result(vf_mask.v);
-      flops += 72; /* For benchmark only. */
+      flops += 9*VEC_SIZE; /* For benchmark only. */
 
       if (mask != 0) {
         int x_hi = CHAR_BIT*sizeof(int) - __builtin_clz(mask);
@@ -1334,7 +1334,7 @@ void DOPAIR1(struct runner *r, struct cell *ci, struct cell *cj) {
             if (icount == VEC_SIZE) {
               IACT_NONSYM_VEC(r2q, dxq, hiq, hjq, piq, pjq);                    // 720xFLOP
               icount = 0;
-              flops += 720; /* For benchmark only. */
+              flops += 90*VEC_SIZE; /* For benchmark only. */
             }
           }
         }
@@ -1365,7 +1365,7 @@ void DOPAIR1(struct runner *r, struct cell *ci, struct cell *cj) {
         if (icount == VEC_SIZE) {
           IACT_NONSYM_VEC(r2q, dxq, hiq, hjq, piq, pjq);                        // 720xFLOP
           icount = 0;
-          flops += 720; /* For benchmark only. */
+          flops += 90*VEC_SIZE; /* For benchmark only. */
         }
       }
     }
@@ -1603,7 +1603,7 @@ void DOPAIR2(struct runner *r, struct cell *ci, struct cell *cj) {
           if (icount1 == VEC_SIZE) {
             IACT_NONSYM_VEC(r2q1, dxq1, hiq1, hjq1, piq1, pjq1);                // 906xFLOP
             icount1 = 0;
-            flops += 906; /* For benchmark only. */
+            flops += 113*VEC_SIZE + 2; /* For benchmark only. */
           }
 
 #endif
@@ -1638,7 +1638,7 @@ void DOPAIR2(struct runner *r, struct cell *ci, struct cell *cj) {
         vector vf_mask;
         vf_mask.v = vec_cmp_lt(vf_r2.v, vf_hig2.v);                             // 8xCMP
         int mask = vec_cmp_result(vf_mask.v);
-        flops += 72; /* For benchmark only. */
+        flops += 9*VEC_SIZE; /* For benchmark only. */
 
         if (mask != 0) {
           int x_hi = CHAR_BIT*sizeof(int) - __builtin_clz(mask);
@@ -1670,7 +1670,7 @@ void DOPAIR2(struct runner *r, struct cell *ci, struct cell *cj) {
                 if (icount2 == VEC_SIZE) {
                   IACT_VEC(r2q2, dxq2, hiq2, hjq2, piq2, pjq2);                 // 978xFLOP
                   icount2 = 0;
-                  flops += 978; /* For benchmark only. */
+                  flops += 122*VEC_SIZE + 2; /* For benchmark only. */
                 }
               } else {
                 r2q1[icount1] = r2;
@@ -1686,7 +1686,7 @@ void DOPAIR2(struct runner *r, struct cell *ci, struct cell *cj) {
                 if (icount1 == VEC_SIZE) {
                   IACT_NONSYM_VEC(r2q1, dxq1, hiq1, hjq1, piq1, pjq1);          // 906xFLOP
                   icount1 = 0;
-                  flops += 906; /* For benchmark only. */
+                  flops += 113*VEC_SIZE + 2; /* For benchmark only. */
                 }
               }
             }
@@ -1721,7 +1721,7 @@ void DOPAIR2(struct runner *r, struct cell *ci, struct cell *cj) {
             if (icount2 == VEC_SIZE) {
               IACT_VEC(r2q2, dxq2, hiq2, hjq2, piq2, pjq2);                     // 978xFLOP
               icount2 = 0;
-              flops += 978; /* For benchmark only. */
+              flops += 122*VEC_SIZE + 2; /* For benchmark only. */
             }
           } else {
             r2q1[icount1] = r2;
@@ -1737,7 +1737,7 @@ void DOPAIR2(struct runner *r, struct cell *ci, struct cell *cj) {
             if (icount1 == VEC_SIZE) {
               IACT_NONSYM_VEC(r2q1, dxq1, hiq1, hjq1, piq1, pjq1);              // 906xFLOP
               icount1 = 0;
-              flops += 906; /* For benchmark only. */
+              flops += 113*VEC_SIZE + 2; /* For benchmark only. */
             }
           }
         }
@@ -1881,7 +1881,7 @@ void DOPAIR2(struct runner *r, struct cell *ci, struct cell *cj) {
           if (icount1 == VEC_SIZE) {
             IACT_NONSYM_VEC(r2q1, dxq1, hiq1, hjq1, piq1, pjq1);                // 906xFLOP
             icount1 = 0;
-            flops += 906; /* For benchmark only. */
+            flops += 113*VEC_SIZE + 2; /* For benchmark only. */
           }
 
 #endif
@@ -1934,7 +1934,7 @@ void DOPAIR2(struct runner *r, struct cell *ci, struct cell *cj) {
               if (icount2 == VEC_SIZE) {
                 IACT_VEC(r2q2, dxq2, hiq2, hjq2, piq2, pjq2);                   // 978xFLOP
                 icount2 = 0;
-                flops += 978; /* For benchmark only. */
+                flops += 122*VEC_SIZE + 2; /* For benchmark only. */
               }
             } else {
               r2q1[icount1] = r2;
@@ -1950,7 +1950,7 @@ void DOPAIR2(struct runner *r, struct cell *ci, struct cell *cj) {
               if (icount1 == VEC_SIZE) {
                 IACT_NONSYM_VEC(r2q1, dxq1, hiq1, hjq1, piq1, pjq1);            // 906xFLOP
                 icount1 = 0;
-                flops += 906; /* For benchmark only. */
+                flops += 113*VEC_SIZE + 2; /* For benchmark only. */
               }
             }
           }
@@ -1976,7 +1976,7 @@ void DOPAIR2(struct runner *r, struct cell *ci, struct cell *cj) {
         vector vf_mask;
         vf_mask.v = vec_cmp_lt(vf_r2.v, vf_hjg2.v);                             // 8xCMP
         int mask = vec_cmp_result(vf_mask.v);
-        flops += 72; /* For benchmark only. */
+        flops += 9*VEC_SIZE; /* For benchmark only. */
 
         if (mask != 0) {
           int x_hi = CHAR_BIT*sizeof(int) - __builtin_clz(mask);
@@ -2010,7 +2010,7 @@ void DOPAIR2(struct runner *r, struct cell *ci, struct cell *cj) {
                   if (icount2 == VEC_SIZE) {
                     IACT_VEC(r2q2, dxq2, hiq2, hjq2, piq2, pjq2);               // 978xFLOP
                     icount2 = 0;
-                    flops += 978; /* For benchmark only. */
+                    flops += 122*VEC_SIZE + 2; /* For benchmark only. */
                   }
                 } else {
                   r2q1[icount1] = r2;
@@ -2026,7 +2026,7 @@ void DOPAIR2(struct runner *r, struct cell *ci, struct cell *cj) {
                   if (icount1 == VEC_SIZE) {
                     IACT_NONSYM_VEC(r2q1, dxq1, hiq1, hjq1, piq1, pjq1);        // 906xFLOP
                     icount1 = 0;
-                    flops += 906; /* For benchmark only. */
+                    flops += 113*VEC_SIZE + 2; /* For benchmark only. */
                   }
                 }
               }
@@ -2064,7 +2064,7 @@ void DOPAIR2(struct runner *r, struct cell *ci, struct cell *cj) {
               if (icount2 == VEC_SIZE) {
                 IACT_VEC(r2q2, dxq2, hiq2, hjq2, piq2, pjq2);                   // 978xFLOP
                 icount2 = 0;
-                flops += 978; /* For benchmark only. */
+                flops += 122*VEC_SIZE + 2; /* For benchmark only. */
               }
             } else {
               r2q1[icount1] = r2;
@@ -2080,7 +2080,7 @@ void DOPAIR2(struct runner *r, struct cell *ci, struct cell *cj) {
               if (icount1 == VEC_SIZE) {
                 IACT_NONSYM_VEC(r2q1, dxq1, hiq1, hjq1, piq1, pjq1);            // 906xFLOP
                 icount1 = 0;
-                flops += 906; /* For benchmark only. */
+                flops += 113*VEC_SIZE + 2; /* For benchmark only. */
               }
             }
           }
@@ -2293,7 +2293,7 @@ void DOSELF1(struct runner *r, struct cell *restrict c) {
           if (icount1 == VEC_SIZE) {
             IACT_NONSYM_VEC(r2q1, dxq1, hiq1, hjq1, piq1, pjq1);                // 720xFLOP
             icount1 = 0;
-            flops += 720; /* For benchmark only. */
+            flops += 90*VEC_SIZE; /* For benchmark only. */
           }
 
 #endif
@@ -2362,7 +2362,7 @@ void DOSELF1(struct runner *r, struct cell *restrict c) {
             if (icount2 == VEC_SIZE) {
               IACT_VEC(r2q2, dxq2, hiq2, hjq2, piq2, pjq2);                     // 776xFLOP
               icount2 = 0;
-              flops += 776; /* For benchmark only. */
+              flops += 97*VEC_SIZE; /* For benchmark only. */
             }
 
           } else if (!doj) {
@@ -2382,7 +2382,7 @@ void DOSELF1(struct runner *r, struct cell *restrict c) {
             if (icount1 == VEC_SIZE) {
               IACT_NONSYM_VEC(r2q1, dxq1, hiq1, hjq1, piq1, pjq1);              // 720xFLOP
               icount1 = 0;
-              flops += 720; /* For benchmark only. */
+              flops += 90*VEC_SIZE; /* For benchmark only. */
             }
 
           } else {
@@ -2403,7 +2403,7 @@ void DOSELF1(struct runner *r, struct cell *restrict c) {
             if (icount1 == VEC_SIZE) {
               IACT_NONSYM_VEC(r2q1, dxq1, hiq1, hjq1, piq1, pjq1);              // 720xFLOP
               icount1 = 0;
-              flops += 720; /* For benchmark only. */
+              flops += 90*VEC_SIZE; /* For benchmark only. */
             }
           }
 
@@ -2537,7 +2537,7 @@ void DOSELF2(struct runner *r, struct cell *restrict c) {
           if (icount1 == VEC_SIZE) {
             IACT_NONSYM_VEC(r2q1, dxq1, hiq1, hjq1, piq1, pjq1);                // 906xFLOP
             icount1 = 0;
-            flops += 906; /* For benchmark only. */
+            flops += 113*VEC_SIZE + 2; /* For benchmark only. */
           }
 
 #endif
@@ -2599,7 +2599,7 @@ void DOSELF2(struct runner *r, struct cell *restrict c) {
             if (icount2 == VEC_SIZE) {
               IACT_VEC(r2q2, dxq2, hiq2, hjq2, piq2, pjq2);                     // 978xFLOP
               icount2 = 0;
-              flops += 978; /* For benchmark only. */
+              flops += 122*VEC_SIZE + 2; /* For benchmark only. */
             }
 
           } else {
@@ -2619,7 +2619,7 @@ void DOSELF2(struct runner *r, struct cell *restrict c) {
             if (icount1 == VEC_SIZE) {
               IACT_NONSYM_VEC(r2q1, dxq1, hiq1, hjq1, piq1, pjq1);              // 906xFLOP
               icount1 = 0;
-              flops += 906; /* For benchmark only. */
+              flops += 113*VEC_SIZE + 2; /* For benchmark only. */
             }
           }
 
