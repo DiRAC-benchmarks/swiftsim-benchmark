@@ -374,7 +374,7 @@ AC_ARG_ENABLE([compiler-warnings],
      [Enable compile time warning flags, if compiler is known @<:@error/no/yes)@:>@]
    )],
    [enable_warn="$enableval"],
-   [enable_warn="error"]
+   [enable_warn="yes"]
 )
 
 if test "$enable_warn" != "no"; then
