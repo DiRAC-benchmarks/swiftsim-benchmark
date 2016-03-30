@@ -125,7 +125,7 @@ const char* benchmark_units(void) {
 
 void benchmark_interval_begin(struct runner* r) {
   struct timespec tm;
-  clock_gettime(CLOCK_MONOTONIC_RAW, &tm);
+  clock_gettime(CLOCK_MONOTONIC, &tm);
   uint64_t nsec = (uint64_t)tm.tv_sec * 1000000000ul + tm.tv_nsec;
 
   benchmark_data[r->id].ticks_begin = nsec;
@@ -133,7 +133,7 @@ void benchmark_interval_begin(struct runner* r) {
 
 void benchmark_interval_end(struct runner* r, uint64_t flops) {
   struct timespec tm;
-  clock_gettime(CLOCK_MONOTONIC_RAW, &tm);
+  clock_gettime(CLOCK_MONOTONIC, &tm);
   uint64_t nsec = (uint64_t)tm.tv_sec * 1000000000ul + tm.tv_nsec;
 
   benchmark_data[r->id].ticks += nsec - benchmark_data[r->id].ticks_begin;
