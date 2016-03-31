@@ -301,6 +301,8 @@ if test "$with_hdf5" != "yes"; then
     AC_MSG_ERROR([Could not find a working HDF5 library])
 fi
 
+HDF5_LDFLAGS=`echo "$HDF5_LDFLAGS" | sed -rn 's:( ?)-L/usr/lib(32|64)? ?:\1:gp'`
+
 # We want to know if this HDF5 supports MPI and whether we should use it.
 # The default is to use MPI support if it is available, i.e. this is
 # a parallel HDF5.
