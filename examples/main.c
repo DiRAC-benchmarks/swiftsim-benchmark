@@ -84,6 +84,7 @@ int main(int argc, char *argv[]) {
   int engine_policies = 0;
   int verbose = 0, talking = 0;
   unsigned long long cpufreq = 0;
+  int nr_steps = 0;
 
 #ifdef WITH_MPI
   struct partition initial_partition;
@@ -159,7 +160,7 @@ int main(int argc, char *argv[]) {
   bzero(&s, sizeof(struct space));
 
   /* Parse the options */
-  while ((c = getopt(argc, argv, "a:c:d:e:f:gh:m:oP:q:R:s:t:v:w:y:z:")) != -1)
+  while ((c = getopt(argc, argv, "a:c:d:e:f:gh:m:oP:q:r:R:s:t:v:w:y:z:")) != -1)
     switch (c) {
       case 'a':
         if (sscanf(optarg, "%lf", &scaling) != 1)
@@ -236,6 +237,15 @@ int main(int argc, char *argv[]) {
       case 'q':
         if (sscanf(optarg, "%d", &nr_queues) != 1)
           error("Error parsing number of queues.");
+        break;
+      case 'r':
+        /* For benchmark only. The multiple time step scheme is such that it's
+         * relatively tricky to preserve the same performance profile while
+         * adjusting simulation length. For the benchmark, allow us to truncate
+         * a longer simulation after a fixed number of steps of any length.
+         */
+        if (sscanf(optarg, "%d", &nr_steps) != 1)
+          error("Error parsing maximum nubmer of steps.");
         break;
       case 'R':
 /* Repartition type "n", "b", "v", "e" or "x".
@@ -550,7 +560,7 @@ int main(int argc, char *argv[]) {
         clocks_getunit());
 
   /* Let loose a runner on the space. */
-  for (int j = 0; !engine_is_done(&e); j++) {
+  for (int j = 0; !engine_is_done(&e) && (nr_steps == 0 || j < nr_steps); j++) {
 
 /* Repartition the space amongst the nodes? */
 #ifdef WITH_MPI
